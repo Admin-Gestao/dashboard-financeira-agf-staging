@@ -78,14 +78,20 @@ const CustomTooltip = ({ active, payload, label, formatter }: any) => {
   return null;
 };
 
-const MultiSelectFilter = ({ name, options, selected, onSelect }: { name: string; options: { id: any; nome: string }[]; selected: any[]; onSelect: (id: any) => void; }) => {
+const MultiSelectFilter = ({
+  name, options, selected, onSelect
+}: { name: string; options: { id: any; nome: string }[]; selected: any[]; onSelect: (id: any) => void; }) => {
   const [isOpen, setIsOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => { if (ref.current && !ref.current.contains(event.target as Node)) setIsOpen(false); };
+    const handleClickOutside = (event: MouseEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) setIsOpen(false);
+    };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [ref]);
+ 
 
   return (
     <div className="relative" ref={ref}>
@@ -114,14 +120,18 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const id = params.get("empresa_id");
-      if (id) setEmpresaId(id);
-      else setLoading(false);
-    }
-  }, []);
+useEffect(() => {
+  if (typeof window !== "undefined") {
+    const params = new URLSearchParams(window.location.search);
+    // Preferir filtro por sócio (user_id). Mantém compatibilidade com empresa_id.
+    const userId = params.get("user_id");
+    const empresa = params.get("empresa_id");
+    const id = userId ?? empresa;
+    if (id) setEmpresaId(id);
+    else setLoading(false);
+  }
+}, []);
+
 
   useEffect(() => {
     if (!empresaId) return;
@@ -129,7 +139,18 @@ export default function DashboardPage() {
       try {
         setLoading(true);
         setError(null);
-        const res = await fetch(`/api/dash-data?empresa_id=${encodeURIComponent(empresaId)}`, { cache: "no-store" });
+        // Se a URL tiver user_id, repassamos esse mesmo parâmetro para a API.
+// Caso contrário, continuamos aceitando empresa_id (compat).
+const hasUserId =
+  typeof window !== "undefined" &&
+  new URLSearchParams(window.location.search).has("user_id");
+
+const queryParam = hasUserId ? "user_id" : "empresa_id";
+
+const res = await fetch(`/api/dash-data?${queryParam}=${encodeURIComponent(empresaId)}`, {
+  cache: "no-store",
+});
+
         if (!res.ok) throw new Error(`A API retornou o status ${res.status}`);
         const json = await res.json();
         if (json.error) throw new Error(json.error);
@@ -251,7 +272,12 @@ export default function DashboardPage() {
   if (error)
     return <div className="flex items-center justify-center h-screen bg-background-start text-red-400"><div className="p-6 bg-card rounded-lg">{error}</div></div>;
   if (!empresaId && !apiData)
-    return <div className="flex items-center justify-center h-screen bg-background-start text-white"><div className="p-6 text-lg">ID da empresa não fornecido. Adicione `?empresa_id=...` à URL.</div></div>;
+  return <div className="flex items-center justify-center h-screen bg-background-start text-white">
+    <div className="p-6 text-lg">
+      ID não fornecido. Adicione <code>?user_id=...</code> (novo) ou <code>?empresa_id=...</code> (compatibilidade) à URL.
+    </div>
+  </div>;
+
 
   return (
     <div className="p-4 md:p-8 bg-background-start text-text min-h-screen">
