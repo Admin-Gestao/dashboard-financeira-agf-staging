@@ -196,15 +196,35 @@ async function bubbleGetOne<T>(type: string, id: string): Promise<T | null> {
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const empresaId = searchParams.get('empresa_id');
-    if (!empresaId) return NextResponse.json({ error: 'empresa_id ausente' }, { status: 400 });
 
-    // 1) AGFs da empresa
-    const agfList = await bubbleGetAll<{ _id: string; 'Nome da AGF'?: string; nome?: string; name?: string }>(
-      'AGF',
-      [{ key: 'Empresa Mãe', constraint_type: 'equals', value: empresaId }],
-      1000
-    );
+    // [A] Aceita user_id (novo) ou empresa_id (compat)
+    const userId     = searchParams.get('user_id');
+    const empresaId  = searchParams.get('empresa_id');
+    if (!userId && !empresaId) {
+      return NextResponse.json({ error: 'Parâmetro ausente: informe ?user_id=... (recomendado) ou ?empresa_id=...' }, { status: 400 });
+    }
+
+    // 1) AGFs
+    let agfList: Array<{ _id: string; ['Nome da AGF']?: string; nome?: string; name?: string }> = [];
+
+    if (userId) {
+      // [B] Filtro por sócio/usuário (duas tentativas para cobrir seus campos)
+      agfList = await bubbleGetAll('AGF', [
+        { key: 'Lista de Usuários', constraint_type: 'contains', value: userId }
+      ], 1000);
+
+      if (agfList.length === 0) {
+        agfList = await bubbleGetAll('AGF', [
+          { key: 'Sócios', constraint_type: 'contains', value: userId }
+        ], 1000);
+      }
+    } else {
+      // Compat: por empresa mãe
+      agfList = await bubbleGetAll('AGF', [
+        { key: 'Empresa Mãe', constraint_type: 'equals', value: empresaId }
+      ], 1000);
+    }
+
     const agfs = agfList.map(a => {
       const nomeRaw = (a as any)['Nome da AGF'] || (a as any).nome || (a as any).name || a._id;
       return { id: a._id, nome: normAgfName(nomeRaw) };
@@ -212,11 +232,32 @@ export async function GET(req: Request) {
     const agfIdToNome = new Map<string, string>(agfs.map(a => [a.id, a.nome]));
     const agfIds = agfs.map(a => a.id);
 
+    // [D] Se não tiver AGFs (ex.: user sem vínculos), retorna vazio de forma segura
+    if (agfIds.length === 0) {
+      return NextResponse.json({
+        agfs: [],
+        categoriasDespesa: ['aluguel','comissoes','extras','honorarios','impostos','pitney','telefone','veiculos','folha_pagamento'],
+        dados: {}
+      });
+    }
+
     // 2) Lançamentos Mensais
-    const lmList = await bubbleGetAll<{
+    let lmList: Array<{
       _id: string; Ano: any; Mês: any; AGF: string | { _id: string }; Data?: string;
       total_receita?: number; total_despesa?: number; resultado_final?: number;
-    }>('LançamentoMensal', [{ key: 'Empresa Mãe', constraint_type: 'equals', value: empresaId }], 1000);
+    }> = [];
+
+    if (userId) {
+      // [C] Para user_id, pegamos LMs das AGFs do usuário
+      lmList = await bubbleGetAll('LançamentoMensal', [
+        { key: 'AGF', constraint_type: 'in', value: agfIds }
+      ], 1000);
+    } else {
+      // Compat: como estava antes (por Empresa Mãe)
+      lmList = await bubbleGetAll('LançamentoMensal', [
+        { key: 'Empresa Mãe', constraint_type: 'equals', value: empresaId }
+      ], 1000);
+    }
 
     const lmIndex = new Map<string, { ano: number; mes: number; agfId?: string; agfNome: string }>();
     for (const lm of lmList) {
@@ -240,7 +281,7 @@ export async function GET(req: Request) {
       })
     );
 
-    // 4) SubContas
+    // 4) SubContas (já era por AGF — mantém)
     const scList = await bubbleGetAll<{
       _id: string;
       AGF: string | { _id: string };
