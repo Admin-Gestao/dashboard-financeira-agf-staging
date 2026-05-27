@@ -300,7 +300,7 @@ async function bubbleGetManyByIds<T>(type: string, ids: string[]): Promise<T[]> 
       }
     })
   );
-  return records.filter((record): record is T => !!record);
+  return records.filter(Boolean) as T[];
 }
 
 type AgfRecord = { _id: string; ["Nome da AGF"]?: string; nome?: string; name?: string };
@@ -708,3 +708,4 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: error.message || "Erro Interno do Servidor" }, { status: 500 });
   }
 }
+
