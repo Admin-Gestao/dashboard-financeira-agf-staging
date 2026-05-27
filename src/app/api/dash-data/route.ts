@@ -136,6 +136,33 @@ function refToIds(value: unknown): string[] {
   return id ? [id] : [];
 }
 
+function tokenizeAgfNames(value: unknown): string[] {
+  if (!value) return [];
+
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => tokenizeAgfNames(item));
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split(/[\n,;]+/)
+      .map((item) => item.replace(/\.+$/g, "").trim())
+      .filter(Boolean);
+  }
+
+  if (typeof value === "object") {
+    const rawName =
+      (value as any)["Nome da AGF"] ??
+      (value as any).nome ??
+      (value as any).name ??
+      (value as any).display ??
+      null;
+    return rawName ? tokenizeAgfNames(String(rawName)) : [];
+  }
+
+  return [];
+}
+
 const CAT_ID_TO_KEY: Record<string, string> = {
   "1754514204139x526063856276349100": "folha_pagamento",
   "1751034502993x140272905276620800": "veiculos",
@@ -336,6 +363,7 @@ export async function GET(req: Request) {
     if (userId) {
       const agfMap = new Map<string, AgfRecord>();
       const empresaMaeIds = new Set<string>();
+      const relatedAgfNames = new Set<string>();
       const addAgfs = (items: AgfRecord[]) => {
         for (const item of items) {
           if (!item?._id) continue;
@@ -358,6 +386,13 @@ export async function GET(req: Request) {
         ...refToIds(userRecord?.["AGF Principal"]),
         ...refToIds(userRecord?.["Socio em"]),
       ]);
+      for (const name of [
+        ...tokenizeAgfNames(userRecord?.AGF),
+        ...tokenizeAgfNames(userRecord?.["AGF Principal"]),
+        ...tokenizeAgfNames(userRecord?.["Socio em"]),
+      ]) {
+        relatedAgfNames.add(normAgfName(name));
+      }
       const userEmpresaMaeId = refToId(userRecord?.["Empresa Mãe"]);
       if (userEmpresaMaeId) empresaMaeIds.add(userEmpresaMaeId);
 
@@ -376,6 +411,17 @@ export async function GET(req: Request) {
         addAgfs(agfsFromRelations);
       }
 
+      if (relatedAgfNames.size > 0) {
+        const allAgfs = await bubbleGetAll<AgfRecord>("AGF", undefined, 1000).catch(() => []);
+        const agfsFromNames = allAgfs.filter((item) => {
+          const nomeAgf = normAgfName(
+            (item as any)["Nome da AGF"] || (item as any).nome || (item as any).name || ""
+          );
+          return !!nomeAgf && relatedAgfNames.has(nomeAgf);
+        });
+        addAgfs(agfsFromNames);
+      }
+
       if (empresaMaeIds.size > 0) {
         const agfsFromEmpresaMae = await Promise.all(
           Array.from(empresaMaeIds).map((empresaMaeRef) =>
@@ -387,6 +433,21 @@ export async function GET(req: Request) {
           )
         );
         for (const batch of agfsFromEmpresaMae) {
+          addAgfs(batch);
+        }
+      }
+
+      if (empresaMaeIds.size > 0) {
+        const agfsFromEmpresaMaeFix = await Promise.all(
+          Array.from(empresaMaeIds).map((empresaMaeRef) =>
+            bubbleGetAll<AgfRecord>(
+              "AGF",
+              [{ key: "Empresa M\u00E3e", constraint_type: "equals", value: empresaMaeRef }],
+              1000
+            ).catch(() => [])
+          )
+        );
+        for (const batch of agfsFromEmpresaMaeFix) {
           addAgfs(batch);
         }
       }
