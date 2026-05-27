@@ -303,11 +303,18 @@ async function bubbleGetManyByIds<T>(type: string, ids: string[]): Promise<T[]> 
   return records.filter(Boolean) as T[];
 }
 
-type AgfRecord = { _id: string; ["Nome da AGF"]?: string; nome?: string; name?: string };
+type AgfRecord = {
+  _id: string;
+  ["Nome da AGF"]?: string;
+  nome?: string;
+  name?: string;
+  ["Empresa Mãe"]?: BubbleRef;
+};
 type UserRecord = {
   AGF?: BubbleRef;
   ["AGF Principal"]?: BubbleRef;
   ["Socio em"]?: BubbleRef[] | BubbleRef;
+  ["Empresa Mãe"]?: BubbleRef;
 };
 type SocioRecord = { AGF?: BubbleRef };
 
@@ -328,9 +335,13 @@ export async function GET(req: Request) {
 
     if (userId) {
       const agfMap = new Map<string, AgfRecord>();
+      const empresaMaeIds = new Set<string>();
       const addAgfs = (items: AgfRecord[]) => {
         for (const item of items) {
-          if (item?._id) agfMap.set(item._id, item);
+          if (!item?._id) continue;
+          agfMap.set(item._id, item);
+          const empresaMaeId = refToId(item["Empresa Mãe"]);
+          if (empresaMaeId) empresaMaeIds.add(empresaMaeId);
         }
       };
 
@@ -347,6 +358,8 @@ export async function GET(req: Request) {
         ...refToIds(userRecord?.["AGF Principal"]),
         ...refToIds(userRecord?.["Socio em"]),
       ]);
+      const userEmpresaMaeId = refToId(userRecord?.["Empresa Mãe"]);
+      if (userEmpresaMaeId) empresaMaeIds.add(userEmpresaMaeId);
 
       const sociosRows = await bubbleGetAll<SocioRecord>(
         "Socios",
@@ -361,6 +374,21 @@ export async function GET(req: Request) {
       if (relatedAgfIds.size > 0) {
         const agfsFromRelations = await bubbleGetManyByIds<AgfRecord>("AGF", Array.from(relatedAgfIds));
         addAgfs(agfsFromRelations);
+      }
+
+      if (empresaMaeIds.size > 0) {
+        const agfsFromEmpresaMae = await Promise.all(
+          Array.from(empresaMaeIds).map((empresaMaeRef) =>
+            bubbleGetAll<AgfRecord>(
+              "AGF",
+              [{ key: "Empresa MÃ£e", constraint_type: "equals", value: empresaMaeRef }],
+              1000
+            ).catch(() => [])
+          )
+        );
+        for (const batch of agfsFromEmpresaMae) {
+          addAgfs(batch);
+        }
       }
 
       agfList = Array.from(agfMap.values());
