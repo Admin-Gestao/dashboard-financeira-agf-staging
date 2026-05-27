@@ -55,11 +55,23 @@ const Card = ({ title, value, borderColor, valueColor }: { title: string; value:
   </div>
 );
 
-const ChartContainer = ({ title, children, className = "" }: { title: string; children: ReactElement; className?: string; }) => (
+const ChartContainer = ({
+  title,
+  children,
+  className = "",
+  chartMinWidth,
+}: {
+  title: string;
+  children: ReactElement;
+  className?: string;
+  chartMinWidth?: number;
+}) => (
   <div className={`bg-card p-4 rounded-lg flex flex-col ${className}`}>
-    <h3 className="font-bold mb-4 text-text">{title}</h3>
-    <div className="flex-grow h-full w-full">
-      <ResponsiveContainer width="100%" height="100%">{children}</ResponsiveContainer>
+    {title ? <h3 className="font-bold mb-4 text-text">{title}</h3> : null}
+    <div className="flex-grow h-full w-full overflow-x-auto overflow-y-hidden pb-2">
+      <div className="h-full" style={chartMinWidth ? { minWidth: `${chartMinWidth}px` } : undefined}>
+        <ResponsiveContainer width="100%" height="100%">{children}</ResponsiveContainer>
+      </div>
     </div>
   </div>
 );
@@ -264,6 +276,8 @@ const res = await fetch(`/api/dash-data?${queryParam}=${encodeURIComponent(empre
   const numberFormatter   = (value: number) => Number(value ?? 0).toLocaleString("pt-BR");
   const compactNumberFormatter = (value: number) => Number(value ?? 0).toLocaleString("pt-BR", { notation: "compact" });
   const moneyRounded = (value: number) => `R$ ${Math.round(Number(value ?? 0)).toLocaleString("pt-BR")}`;
+  const agfChartMinWidth = Math.max(560, dadosProcessados.totaisPorAgf.length * 110);
+  const agfTick = { fill: "#E9F2FF", opacity: 0.7, fontSize: 11 };
 
   const CORES = { receita: "#4AA8FF", despesa: "#E74C3C", resultado: "#48DB8A", objetos: "#F2C14E", margem: "#A974F8", simulacaoReal: "#A974F8", simulacaoGanho: "#F4D35E" };
 
@@ -318,40 +332,44 @@ const res = await fetch(`/api/dash-data?${queryParam}=${encodeURIComponent(empre
 
         {/* Comparativos */}
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <ChartContainer title="Comparativo de Receita" className="h-[280px]">
+          <ChartContainer title="Comparativo de Receita" className="h-[320px]" chartMinWidth={agfChartMinWidth}>
             <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 20, left: -20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(233, 242, 255, 0.1)" />
-              <XAxis dataKey="nome" tick={{ fill: "#E9F2FF", opacity: 0.7, fontSize: 12 }} /><YAxis hide />
+              <XAxis dataKey="nome" interval={0} angle={-25} textAnchor="end" height={72} tickMargin={10} tick={agfTick} />
+              <YAxis hide />
               <Tooltip content={<CustomTooltip formatter={currencyFormatter} />} cursor={{ fill: "rgba(255, 255, 255, 0.1)" }} />
               <Bar dataKey="receita" fill={CORES.receita} name="Receita">
                 <LabelList dataKey="receita" position="top" formatter={(v: number) => compactNumberFormatter(Number(v ?? 0))} style={{ fill: "#E9F2FF", fontSize: 12 }} />
               </Bar>
             </BarChart>
           </ChartContainer>
-          <ChartContainer title="Comparativo de Despesa" className="h-[280px]">
+          <ChartContainer title="Comparativo de Despesa" className="h-[320px]" chartMinWidth={agfChartMinWidth}>
             <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 20, left: -20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(233, 242, 255, 0.1)" />
-              <XAxis dataKey="nome" tick={{ fill: "#E9F2FF", opacity: 0.7, fontSize: 12 }} /><YAxis hide />
+              <XAxis dataKey="nome" interval={0} angle={-25} textAnchor="end" height={72} tickMargin={10} tick={agfTick} />
+              <YAxis hide />
               <Tooltip content={<CustomTooltip formatter={currencyFormatter} />} cursor={{ fill: "rgba(255, 255, 255, 0.1)" }} />
               <Bar dataKey="despesaTotal" fill={CORES.despesa} name="Despesa">
                 <LabelList dataKey="despesaTotal" position="top" formatter={(v: number) => compactNumberFormatter(Number(v ?? 0))} style={{ fill: "#E9F2FF", fontSize: 12 }} />
               </Bar>
             </BarChart>
           </ChartContainer>
-          <ChartContainer title="Comparativo de Resultado" className="h-[280px]">
+          <ChartContainer title="Comparativo de Resultado" className="h-[320px]" chartMinWidth={agfChartMinWidth}>
             <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 20, left: -20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(233, 242, 255, 0.1)" />
-              <XAxis dataKey="nome" tick={{ fill: "#E9F2FF", opacity: 0.7, fontSize: 12 }} /><YAxis hide />
+              <XAxis dataKey="nome" interval={0} angle={-25} textAnchor="end" height={72} tickMargin={10} tick={agfTick} />
+              <YAxis hide />
               <Tooltip content={<CustomTooltip formatter={currencyFormatter} />} cursor={{ fill: "rgba(255, 255, 255, 0.1)" }} />
               <Bar dataKey="resultado" fill={CORES.resultado} name="Resultado">
                 <LabelList dataKey="resultado" position="top" formatter={(v: number) => compactNumberFormatter(Number(v ?? 0))} style={{ fill: "#E9F2FF", fontSize: 12 }} />
               </Bar>
             </BarChart>
           </ChartContainer>
-          <ChartContainer title="Comparativo de Margem de Lucro (%)" className="h-[280px]">
+          <ChartContainer title="Comparativo de Margem de Lucro (%)" className="h-[320px]" chartMinWidth={agfChartMinWidth}>
             <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 20, left: -20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(233, 242, 255, 0.1)" />
-              <XAxis dataKey="nome" tick={{ fill: "#E9F2FF", opacity: 0.7, fontSize: 12 }} /><YAxis hide />
+              <XAxis dataKey="nome" interval={0} angle={-25} textAnchor="end" height={72} tickMargin={10} tick={agfTick} />
+              <YAxis hide />
               <Tooltip content={<CustomTooltip formatter={percentFormatter} />} cursor={{ fill: "rgba(255, 255, 255, 0.1)" }} />
               <Bar dataKey="margemLucro" fill={CORES.margem} name="Margem">
                 <LabelList dataKey="margemLucro" position="top" formatter={(v: number) => `${Number(v ?? 0).toFixed(1)}%`} style={{ fill: "#E9F2FF", fontSize: 12 }} />
@@ -362,10 +380,10 @@ const res = await fetch(`/api/dash-data?${queryParam}=${encodeURIComponent(empre
 
         {/* Folha e Veículos */}
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <ChartContainer title="Folha de Pagamento" className="h-[350px]">
+          <ChartContainer title="Folha de Pagamento" className="h-[380px]" chartMinWidth={agfChartMinWidth}>
             <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 20, left: -10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(233, 242, 255, 0.1)" />
-              <XAxis dataKey="nome" tick={{ fill: "#E9F2FF", opacity: 0.7, fontSize: 12 }} />
+              <XAxis dataKey="nome" interval={0} angle={-25} textAnchor="end" height={72} tickMargin={10} tick={agfTick} />
               <YAxis tickFormatter={compactNumberFormatter} tick={{ fill: "#E9F2FF", opacity: 0.7, fontSize: 12 }} />
               <Tooltip content={<CustomTooltip formatter={currencyFormatter} />} cursor={{ fill: "rgba(255, 255, 255, 0.1)" }} />
               <Bar dataKey="despesasDetalhadas.folha_pagamento" fill="#4472CA" name="Folha de Pagamento">
@@ -493,11 +511,11 @@ const res = await fetch(`/api/dash-data?${queryParam}=${encodeURIComponent(empre
             </div>
           </div>
 
-          <ChartContainer title="" className="h-[300px]">
+          <ChartContainer title="" className="h-[420px]" chartMinWidth={Math.max(640, dadosProcessados.totaisPorAgf.length * 80)}>
             <BarChart data={dadosProcessados.totaisPorAgf} layout="vertical" margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(233, 242, 255, 0.1)" />
               <XAxis type="number" domain={[0, 100]} tickFormatter={(v: number) => `${Number(v ?? 0).toFixed(1)}%`} tick={{ fill: "#E9F2FF", opacity: 0.7, fontSize: 12 }} />
-              <YAxis type="category" dataKey="nome" stroke="#E9F2FF" tick={{ fill: "#E9F2FF", opacity: 0.7, fontSize: 12 }} width={90} />
+              <YAxis type="category" dataKey="nome" stroke="#E9F2FF" tick={{ fill: "#E9F2FF", opacity: 0.7, fontSize: 12 }} width={130} />
               <Tooltip content={<CustomTooltip formatter={(v: number) => `${Number(v ?? 0).toFixed(1)}%`} />} cursor={{ fill: "rgba(255, 255, 255, 0.1)" }} />
               <Legend wrapperStyle={{ fontSize: "12px", opacity: 0.8 }} />
               <Bar dataKey="margemLucroReal" stackId="a" fill="#A974F8" name="Margem Real">
