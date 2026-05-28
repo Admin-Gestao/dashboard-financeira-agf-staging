@@ -367,7 +367,7 @@ export async function GET(req: Request) {
     let agfList: AgfRecord[] = [];
 
     if (userId) {
-      const userRecord = await bubbleGetOne<UserRecord>("User", userId).catch(() => null);
+      const userRecord = await bubbleGetOne<UserRecord>("user", userId).catch(() => null);
       const socioEmIds = new Set<string>(refToIds(userRecord?.["Socio em"]));
       const socioEmNames = new Set<string>(
         tokenizeAgfNames(userRecord?.["Socio em"]).map((name) => normAgfName(name)).filter(Boolean)
