@@ -3,6 +3,32 @@ import { NextResponse } from "next/server";
 const BASE = process.env.BUBBLE_BASE_URL!;
 const KEY = process.env.BUBBLE_API_KEY!;
 
+const CATEGORIAS_DESPESA = [
+  "aluguel",
+  "comissoes",
+  "extras",
+  "honorarios",
+  "impostos",
+  "pitney",
+  "telefone",
+  "veiculos",
+  "folha_pagamento",
+] as const;
+
+type CategoriaDespesa = (typeof CATEGORIAS_DESPESA)[number];
+type BubbleRef = string | { _id?: string } | null | undefined;
+
+type AgfRecord = {
+  _id: string;
+  ["Nome da AGF"]?: string;
+  nome?: string;
+  name?: string;
+};
+
+type UserRecord = {
+  ["Socio em"]?: unknown;
+};
+
 function enc(value: string) {
   return encodeURIComponent(value);
 }
@@ -17,6 +43,51 @@ function normAgfName(value: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function refToId(value: BubbleRef): string | null {
+  if (!value) return null;
+  if (typeof value === "string") return value;
+  if (typeof value === "object" && typeof value._id === "string") return value._id;
+  return null;
+}
+
+function refToIds(value: unknown): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => refToId(item as BubbleRef))
+      .filter((id): id is string => !!id);
+  }
+  const id = refToId(value as BubbleRef);
+  return id ? [id] : [];
+}
+
+function tokenizeAgfNames(value: unknown): string[] {
+  if (!value) return [];
+
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => tokenizeAgfNames(item));
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split(/[\n,;]+/)
+      .map((item) => item.replace(/\.+$/g, "").trim())
+      .filter(Boolean);
+  }
+
+  if (typeof value === "object") {
+    const rawName =
+      (value as any)["Nome da AGF"] ??
+      (value as any).nome ??
+      (value as any).name ??
+      (value as any).display ??
+      null;
+    return rawName ? tokenizeAgfNames(String(rawName)) : [];
+  }
+
+  return [];
 }
 
 const MESES: Record<string, number> = {
@@ -116,54 +187,7 @@ function parseValorBR(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-type BubbleRef = string | { _id?: string } | null | undefined;
-
-function refToId(value: BubbleRef): string | null {
-  if (!value) return null;
-  if (typeof value === "string") return value;
-  if (typeof value === "object" && typeof value._id === "string") return value._id;
-  return null;
-}
-
-function refToIds(value: unknown): string[] {
-  if (!value) return [];
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => refToId(item as BubbleRef))
-      .filter((id): id is string => !!id);
-  }
-  const id = refToId(value as BubbleRef);
-  return id ? [id] : [];
-}
-
-function tokenizeAgfNames(value: unknown): string[] {
-  if (!value) return [];
-
-  if (Array.isArray(value)) {
-    return value.flatMap((item) => tokenizeAgfNames(item));
-  }
-
-  if (typeof value === "string") {
-    return value
-      .split(/[\n,;]+/)
-      .map((item) => item.replace(/\.+$/g, "").trim())
-      .filter(Boolean);
-  }
-
-  if (typeof value === "object") {
-    const rawName =
-      (value as any)["Nome da AGF"] ??
-      (value as any).nome ??
-      (value as any).name ??
-      (value as any).display ??
-      null;
-    return rawName ? tokenizeAgfNames(String(rawName)) : [];
-  }
-
-  return [];
-}
-
-const CAT_ID_TO_KEY: Record<string, string> = {
+const CAT_ID_TO_KEY: Record<string, CategoriaDespesa> = {
   "1754514204139x526063856276349100": "folha_pagamento",
   "1751034502993x140272905276620800": "veiculos",
   "1751034541896x868439199319326700": "telefone",
@@ -193,7 +217,7 @@ const CAT_ID_TO_KEY: Record<string, string> = {
   "1755695521004x217825384616417760": "folha_pagamento",
 };
 
-function normalizeCategoriaFromMeta(nomeCategoria: string, descricao: string, categoriaId?: string) {
+function normalizeCategoriaFromMeta(nomeCategoria: string, descricao: string, categoriaId?: string): CategoriaDespesa {
   if (categoriaId && CAT_ID_TO_KEY[categoriaId]) {
     return CAT_ID_TO_KEY[categoriaId];
   }
@@ -204,7 +228,7 @@ function normalizeCategoriaFromMeta(nomeCategoria: string, descricao: string, ca
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 
-  const directMap: Record<string, string> = {
+  const directMap: Record<string, CategoriaDespesa> = {
     aluguel: "aluguel",
     comissao: "comissoes",
     comissoes: "comissoes",
@@ -223,10 +247,7 @@ function normalizeCategoriaFromMeta(nomeCategoria: string, descricao: string, ca
     "folha pagamento": "folha_pagamento",
   };
 
-  if (directMap[categoriaNormalizada]) {
-    return directMap[categoriaNormalizada];
-  }
-
+  if (directMap[categoriaNormalizada]) return directMap[categoriaNormalizada];
   if (categoriaNormalizada.includes("alug")) return "aluguel";
   if (categoriaNormalizada.includes("comis")) return "comissoes";
   if (categoriaNormalizada.includes("honor")) return "honorarios";
@@ -330,21 +351,6 @@ async function bubbleGetManyByIds<T>(type: string, ids: string[]): Promise<T[]> 
   return records.filter(Boolean) as T[];
 }
 
-type AgfRecord = {
-  _id: string;
-  ["Nome da AGF"]?: string;
-  nome?: string;
-  name?: string;
-  ["Empresa Mãe"]?: BubbleRef;
-};
-type UserRecord = {
-  AGF?: BubbleRef;
-  ["AGF Principal"]?: BubbleRef;
-  ["Socio em"]?: BubbleRef[] | BubbleRef;
-  ["Empresa Mãe"]?: BubbleRef;
-};
-type SocioRecord = { AGF?: BubbleRef };
-
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -361,95 +367,34 @@ export async function GET(req: Request) {
     let agfList: AgfRecord[] = [];
 
     if (userId) {
+      const userRecord = await bubbleGetOne<UserRecord>("User", userId).catch(() => null);
+      const socioEmIds = new Set<string>(refToIds(userRecord?.["Socio em"]));
+      const socioEmNames = new Set<string>(
+        tokenizeAgfNames(userRecord?.["Socio em"]).map((name) => normAgfName(name)).filter(Boolean)
+      );
+
       const agfMap = new Map<string, AgfRecord>();
-      const empresaMaeIds = new Set<string>();
-      const relatedAgfNames = new Set<string>();
       const addAgfs = (items: AgfRecord[]) => {
         for (const item of items) {
           if (!item?._id) continue;
           agfMap.set(item._id, item);
-          const empresaMaeId = refToId(item["Empresa Mãe"]);
-          if (empresaMaeId) empresaMaeIds.add(empresaMaeId);
         }
       };
 
-      const agfsFromListaUsuarios = await bubbleGetAll<AgfRecord>(
-        "AGF",
-        [{ key: "Lista de Usuários", constraint_type: "contains", value: userId }],
-        1000
-      ).catch(() => []);
-      addAgfs(agfsFromListaUsuarios);
-
-      const userRecord = await bubbleGetOne<UserRecord>("User", userId).catch(() => null);
-      const relatedAgfIds = new Set<string>([
-        ...refToIds(userRecord?.AGF),
-        ...refToIds(userRecord?.["AGF Principal"]),
-        ...refToIds(userRecord?.["Socio em"]),
-      ]);
-      for (const name of [
-        ...tokenizeAgfNames(userRecord?.AGF),
-        ...tokenizeAgfNames(userRecord?.["AGF Principal"]),
-        ...tokenizeAgfNames(userRecord?.["Socio em"]),
-      ]) {
-        relatedAgfNames.add(normAgfName(name));
-      }
-      const userEmpresaMaeId = refToId(userRecord?.["Empresa Mãe"]);
-      if (userEmpresaMaeId) empresaMaeIds.add(userEmpresaMaeId);
-
-      const sociosRows = await bubbleGetAll<SocioRecord>(
-        "Socios",
-        [{ key: "Nome", constraint_type: "equals", value: userId }],
-        1000
-      ).catch(() => []);
-      for (const row of sociosRows) {
-        const agfId = refToId(row.AGF);
-        if (agfId) relatedAgfIds.add(agfId);
+      if (socioEmIds.size > 0) {
+        const agfsFromIds = await bubbleGetManyByIds<AgfRecord>("AGF", Array.from(socioEmIds));
+        addAgfs(agfsFromIds);
       }
 
-      if (relatedAgfIds.size > 0) {
-        const agfsFromRelations = await bubbleGetManyByIds<AgfRecord>("AGF", Array.from(relatedAgfIds));
-        addAgfs(agfsFromRelations);
-      }
-
-      if (relatedAgfNames.size > 0) {
+      if (socioEmNames.size > 0) {
         const allAgfs = await bubbleGetAll<AgfRecord>("AGF", undefined, 1000).catch(() => []);
         const agfsFromNames = allAgfs.filter((item) => {
           const nomeAgf = normAgfName(
             (item as any)["Nome da AGF"] || (item as any).nome || (item as any).name || ""
           );
-          return !!nomeAgf && relatedAgfNames.has(nomeAgf);
+          return !!nomeAgf && socioEmNames.has(nomeAgf);
         });
         addAgfs(agfsFromNames);
-      }
-
-      if (empresaMaeIds.size > 0) {
-        const agfsFromEmpresaMae = await Promise.all(
-          Array.from(empresaMaeIds).map((empresaMaeRef) =>
-            bubbleGetAll<AgfRecord>(
-              "AGF",
-              [{ key: "Empresa MÃ£e", constraint_type: "equals", value: empresaMaeRef }],
-              1000
-            ).catch(() => [])
-          )
-        );
-        for (const batch of agfsFromEmpresaMae) {
-          addAgfs(batch);
-        }
-      }
-
-      if (empresaMaeIds.size > 0) {
-        const agfsFromEmpresaMaeFix = await Promise.all(
-          Array.from(empresaMaeIds).map((empresaMaeRef) =>
-            bubbleGetAll<AgfRecord>(
-              "AGF",
-              [{ key: "Empresa M\u00E3e", constraint_type: "equals", value: empresaMaeRef }],
-              1000
-            ).catch(() => [])
-          )
-        );
-        for (const batch of agfsFromEmpresaMaeFix) {
-          addAgfs(batch);
-        }
       }
 
       agfList = Array.from(agfMap.values());
@@ -474,17 +419,7 @@ export async function GET(req: Request) {
     if (agfIds.length === 0) {
       return NextResponse.json({
         agfs: [],
-        categoriasDespesa: [
-          "aluguel",
-          "comissoes",
-          "extras",
-          "honorarios",
-          "impostos",
-          "pitney",
-          "telefone",
-          "veiculos",
-          "folha_pagamento",
-        ],
+        categoriasDespesa: [...CATEGORIAS_DESPESA],
         dados: {},
       });
     }
@@ -619,18 +554,6 @@ export async function GET(req: Request) {
       1000
     );
 
-    const categoriasDespesa = [
-      "aluguel",
-      "comissoes",
-      "extras",
-      "honorarios",
-      "impostos",
-      "pitney",
-      "telefone",
-      "veiculos",
-      "folha_pagamento",
-    ];
-
     const dados: Record<
       number,
       Record<
@@ -657,7 +580,7 @@ export async function GET(req: Request) {
           receita: 0,
           objetos: 0,
           despesa_total: 0,
-          despesas: Object.fromEntries(categoriasDespesa.map((categoria) => [categoria, 0])),
+          despesas: Object.fromEntries(CATEGORIAS_DESPESA.map((categoria) => [categoria, 0])),
         };
       }
       return dados[ano][mes][key];
@@ -755,15 +678,11 @@ export async function GET(req: Request) {
       }
 
       const descricao = (sc as any)["Descrição"] ?? (sc as any).descricao ?? "";
-      let categoria = normalizeCategoriaFromMeta(
+      const categoria = normalizeCategoriaFromMeta(
         nomeCategoria,
         descricao,
         typeof categoriaRaw === "string" ? categoriaRaw : undefined
       );
-
-      if (!categoriasDespesa.includes(categoria)) {
-        categoria = "extras";
-      }
 
       const valor = parseValorBR((sc as any).Valor);
       entry.despesas[categoria] = (entry.despesas[categoria] || 0) + valor;
@@ -779,7 +698,7 @@ export async function GET(req: Request) {
           item.receita = Number(item.receita || 0);
           item.objetos = Number(item.objetos || 0);
           item.despesa_total = Number(item.despesa_total || 0);
-          for (const categoria of categoriasDespesa) {
+          for (const categoria of CATEGORIAS_DESPESA) {
             item.despesas[categoria] = Number(item.despesas[categoria] || 0);
           }
           item.despesa_subcontas_total = Number(item.despesa_subcontas_total || 0);
@@ -789,7 +708,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       agfs,
-      categoriasDespesa,
+      categoriasDespesa: [...CATEGORIAS_DESPESA],
       dados,
     });
   } catch (error: any) {
@@ -797,4 +716,3 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: error.message || "Erro Interno do Servidor" }, { status: 500 });
   }
 }
-
