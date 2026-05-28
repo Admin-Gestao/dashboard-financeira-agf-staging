@@ -337,6 +337,18 @@ async function bubbleGetOne<T>(type: string, id: string): Promise<T | null> {
   return data?.response ? (data.response as T) : null;
 }
 
+async function bubbleGetOneFirst<T>(types: string[], id: string): Promise<T | null> {
+  for (const type of types) {
+    try {
+      const record = await bubbleGetOne<T>(type, id);
+      if (record) return record;
+    } catch {
+      // try next type alias
+    }
+  }
+  return null;
+}
+
 async function bubbleGetManyByIds<T>(type: string, ids: string[]): Promise<T[]> {
   const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
   const records = await Promise.all(
@@ -367,7 +379,7 @@ export async function GET(req: Request) {
     let agfList: AgfRecord[] = [];
 
     if (userId) {
-      const userRecord = await bubbleGetOne<UserRecord>("user", userId).catch(() => null);
+      const userRecord = await bubbleGetOneFirst<UserRecord>(["user", "User"], userId).catch(() => null);
       const socioEmIds = new Set<string>(refToIds(userRecord?.["Socio em"]));
       const socioEmNames = new Set<string>(
         tokenizeAgfNames(userRecord?.["Socio em"]).map((name) => normAgfName(name)).filter(Boolean)
