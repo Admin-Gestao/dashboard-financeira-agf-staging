@@ -349,6 +349,53 @@ async function bubbleGetOneFirst<T>(types: string[], id: string): Promise<T | nu
   return null;
 }
 
+async function bubbleTryUserLookups(userId: string) {
+  const attempts: Array<Record<string, unknown>> = [];
+
+  for (const type of ["user", "User", "users", "Users"]) {
+    try {
+      const byId = await bubbleGetOne<any>(type, userId);
+      attempts.push({
+        type,
+        mode: "by_id",
+        found: !!byId,
+        keys: byId ? Object.keys(byId) : [],
+      });
+    } catch (error: any) {
+      attempts.push({
+        type,
+        mode: "by_id",
+        found: false,
+        error: error?.message || String(error),
+      });
+    }
+
+    try {
+      const bySearch = await bubbleGetAll<any>(
+        type,
+        [{ key: "_id", constraint_type: "equals", value: userId }],
+        5
+      );
+      attempts.push({
+        type,
+        mode: "search__id",
+        found: bySearch.length > 0,
+        count: bySearch.length,
+        keys: bySearch[0] ? Object.keys(bySearch[0]) : [],
+      });
+    } catch (error: any) {
+      attempts.push({
+        type,
+        mode: "search__id",
+        found: false,
+        error: error?.message || String(error),
+      });
+    }
+  }
+
+  return attempts;
+}
+
 async function bubbleGetManyByIds<T>(type: string, ids: string[]): Promise<T[]> {
   const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
   const records = await Promise.all(
@@ -414,6 +461,7 @@ export async function GET(req: Request) {
       agfList = Array.from(agfMap.values());
       if (debugMode) {
         debugInfo.userId = userId;
+        debugInfo.userLookupAttempts = await bubbleTryUserLookups(userId);
         debugInfo.userRecordFound = !!userRecord;
         debugInfo.userRecordKeys = userRecord ? Object.keys(userRecord as Record<string, unknown>) : [];
         debugInfo.socioEmRaw = userRecord?.["Socio em"] ?? null;
