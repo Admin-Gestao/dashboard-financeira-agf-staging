@@ -29,6 +29,11 @@ type UserRecord = {
   ["Socio em"]?: unknown;
 };
 
+type SocioRecord = {
+  AGF?: BubbleRef;
+  Nome?: BubbleRef;
+};
+
 function enc(value: string) {
   return encodeURIComponent(value);
 }
@@ -337,18 +342,6 @@ async function bubbleGetOne<T>(type: string, id: string): Promise<T | null> {
   return data?.response ? (data.response as T) : null;
 }
 
-async function bubbleGetOneFirst<T>(types: string[], id: string): Promise<T | null> {
-  for (const type of types) {
-    try {
-      const record = await bubbleGetOne<T>(type, id);
-      if (record) return record;
-    } catch {
-      // try next type alias
-    }
-  }
-  return null;
-}
-
 async function bubbleTryUserLookups(userId: string) {
   const attempts: Array<Record<string, unknown>> = [];
 
@@ -428,12 +421,6 @@ export async function GET(req: Request) {
     let agfList: AgfRecord[] = [];
 
     if (userId) {
-      const userRecord = await bubbleGetOneFirst<UserRecord>(["user", "User"], userId).catch(() => null);
-      const socioEmIds = new Set<string>(refToIds(userRecord?.["Socio em"]));
-      const socioEmNames = new Set<string>(
-        tokenizeAgfNames(userRecord?.["Socio em"]).map((name) => normAgfName(name)).filter(Boolean)
-      );
-
       const agfMap = new Map<string, AgfRecord>();
       const addAgfs = (items: AgfRecord[]) => {
         for (const item of items) {
@@ -442,34 +429,35 @@ export async function GET(req: Request) {
         }
       };
 
-      if (socioEmIds.size > 0) {
-        const agfsFromIds = await bubbleGetManyByIds<AgfRecord>("AGF", Array.from(socioEmIds));
-        addAgfs(agfsFromIds);
+      const sociosRows = await bubbleGetAll<SocioRecord>(
+        "Socios",
+        [{ key: "Nome", constraint_type: "equals", value: userId }],
+        1000
+      ).catch(() => []);
+
+      const socioAgfIds = new Set<string>();
+      for (const row of sociosRows) {
+        const agfId = refToId(row.AGF);
+        if (agfId) socioAgfIds.add(agfId);
       }
 
-      if (socioEmNames.size > 0) {
-        const allAgfs = await bubbleGetAll<AgfRecord>("AGF", undefined, 1000).catch(() => []);
-        const agfsFromNames = allAgfs.filter((item) => {
-          const nomeAgf = normAgfName(
-            (item as any)["Nome da AGF"] || (item as any).nome || (item as any).name || ""
-          );
-          return !!nomeAgf && socioEmNames.has(nomeAgf);
-        });
-        addAgfs(agfsFromNames);
+      if (socioAgfIds.size > 0) {
+        const agfsFromSocios = await bubbleGetManyByIds<AgfRecord>("AGF", Array.from(socioAgfIds));
+        addAgfs(agfsFromSocios);
       }
 
       agfList = Array.from(agfMap.values());
       if (debugMode) {
         debugInfo.userId = userId;
         debugInfo.userLookupAttempts = await bubbleTryUserLookups(userId);
-        debugInfo.userRecordFound = !!userRecord;
-        debugInfo.userRecordKeys = userRecord ? Object.keys(userRecord as Record<string, unknown>) : [];
-        debugInfo.socioEmRaw = userRecord?.["Socio em"] ?? null;
-        debugInfo.socioEmRawType = Array.isArray(userRecord?.["Socio em"])
-          ? "array"
-          : typeof userRecord?.["Socio em"];
-        debugInfo.socioEmIds = Array.from(socioEmIds);
-        debugInfo.socioEmNames = Array.from(socioEmNames);
+        debugInfo.userRecordFound = false;
+        debugInfo.userRecordKeys = [];
+        debugInfo.socioEmRaw = null;
+        debugInfo.socioEmRawType = "unavailable_via_data_api";
+        debugInfo.socioEmIds = [];
+        debugInfo.socioEmNames = [];
+        debugInfo.sociosRowsCount = sociosRows.length;
+        debugInfo.sociosAgfIds = Array.from(socioAgfIds);
         debugInfo.resolvedAgfs = agfList.map((agf) => ({
           id: agf._id,
           nome: normAgfName((agf as any)["Nome da AGF"] || (agf as any).nome || (agf as any).name || agf._id),
