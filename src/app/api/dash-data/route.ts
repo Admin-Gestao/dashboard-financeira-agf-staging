@@ -368,6 +368,8 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get("user_id");
     const empresaId = searchParams.get("empresa_id");
+    const debugMode = searchParams.get("debug") === "1";
+    const debugInfo: Record<string, unknown> = {};
 
     if (!userId && !empresaId) {
       return NextResponse.json(
@@ -410,6 +412,21 @@ export async function GET(req: Request) {
       }
 
       agfList = Array.from(agfMap.values());
+      if (debugMode) {
+        debugInfo.userId = userId;
+        debugInfo.userRecordFound = !!userRecord;
+        debugInfo.userRecordKeys = userRecord ? Object.keys(userRecord as Record<string, unknown>) : [];
+        debugInfo.socioEmRaw = userRecord?.["Socio em"] ?? null;
+        debugInfo.socioEmRawType = Array.isArray(userRecord?.["Socio em"])
+          ? "array"
+          : typeof userRecord?.["Socio em"];
+        debugInfo.socioEmIds = Array.from(socioEmIds);
+        debugInfo.socioEmNames = Array.from(socioEmNames);
+        debugInfo.resolvedAgfs = agfList.map((agf) => ({
+          id: agf._id,
+          nome: normAgfName((agf as any)["Nome da AGF"] || (agf as any).nome || (agf as any).name || agf._id),
+        }));
+      }
     } else {
       agfList = await bubbleGetAll<AgfRecord>(
         "AGF",
@@ -433,6 +450,7 @@ export async function GET(req: Request) {
         agfs: [],
         categoriasDespesa: [...CATEGORIAS_DESPESA],
         dados: {},
+        ...(debugMode ? { debug: debugInfo } : {}),
       });
     }
 
@@ -722,6 +740,7 @@ export async function GET(req: Request) {
       agfs,
       categoriasDespesa: [...CATEGORIAS_DESPESA],
       dados,
+      ...(debugMode ? { debug: debugInfo } : {}),
     });
   } catch (error: any) {
     console.error("Erro na API:", error);
