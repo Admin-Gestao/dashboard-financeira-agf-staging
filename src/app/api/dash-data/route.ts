@@ -23,15 +23,7 @@ type AgfRecord = {
   ["Nome da AGF"]?: string;
   nome?: string;
   name?: string;
-};
-
-type UserRecord = {
-  ["Socio em"]?: unknown;
-};
-
-type SocioRecord = {
-  AGF?: BubbleRef;
-  Nome?: BubbleRef;
+  ["Lista de Usuários"]?: string[];
 };
 
 function enc(value: string) {
@@ -55,44 +47,6 @@ function refToId(value: BubbleRef): string | null {
   if (typeof value === "string") return value;
   if (typeof value === "object" && typeof value._id === "string") return value._id;
   return null;
-}
-
-function refToIds(value: unknown): string[] {
-  if (!value) return [];
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => refToId(item as BubbleRef))
-      .filter((id): id is string => !!id);
-  }
-  const id = refToId(value as BubbleRef);
-  return id ? [id] : [];
-}
-
-function tokenizeAgfNames(value: unknown): string[] {
-  if (!value) return [];
-
-  if (Array.isArray(value)) {
-    return value.flatMap((item) => tokenizeAgfNames(item));
-  }
-
-  if (typeof value === "string") {
-    return value
-      .split(/[\n,;]+/)
-      .map((item) => item.replace(/\.+$/g, "").trim())
-      .filter(Boolean);
-  }
-
-  if (typeof value === "object") {
-    const rawName =
-      (value as any)["Nome da AGF"] ??
-      (value as any).nome ??
-      (value as any).name ??
-      (value as any).display ??
-      null;
-    return rawName ? tokenizeAgfNames(String(rawName)) : [];
-  }
-
-  return [];
 }
 
 const MESES: Record<string, number> = {
@@ -342,67 +296,6 @@ async function bubbleGetOne<T>(type: string, id: string): Promise<T | null> {
   return data?.response ? (data.response as T) : null;
 }
 
-async function bubbleTryUserLookups(userId: string) {
-  const attempts: Array<Record<string, unknown>> = [];
-
-  for (const type of ["user", "User", "users", "Users"]) {
-    try {
-      const byId = await bubbleGetOne<any>(type, userId);
-      attempts.push({
-        type,
-        mode: "by_id",
-        found: !!byId,
-        keys: byId ? Object.keys(byId) : [],
-      });
-    } catch (error: any) {
-      attempts.push({
-        type,
-        mode: "by_id",
-        found: false,
-        error: error?.message || String(error),
-      });
-    }
-
-    try {
-      const bySearch = await bubbleGetAll<any>(
-        type,
-        [{ key: "_id", constraint_type: "equals", value: userId }],
-        5
-      );
-      attempts.push({
-        type,
-        mode: "search__id",
-        found: bySearch.length > 0,
-        count: bySearch.length,
-        keys: bySearch[0] ? Object.keys(bySearch[0]) : [],
-      });
-    } catch (error: any) {
-      attempts.push({
-        type,
-        mode: "search__id",
-        found: false,
-        error: error?.message || String(error),
-      });
-    }
-  }
-
-  return attempts;
-}
-
-async function bubbleGetManyByIds<T>(type: string, ids: string[]): Promise<T[]> {
-  const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
-  const records = await Promise.all(
-    uniqueIds.map(async (id) => {
-      try {
-        return await bubbleGetOne<T>(type, id);
-      } catch {
-        return null;
-      }
-    })
-  );
-  return records.filter(Boolean) as T[];
-}
-
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -421,46 +314,28 @@ export async function GET(req: Request) {
     let agfList: AgfRecord[] = [];
 
     if (userId) {
-      const agfMap = new Map<string, AgfRecord>();
-      const addAgfs = (items: AgfRecord[]) => {
-        for (const item of items) {
-          if (!item?._id) continue;
-          agfMap.set(item._id, item);
-        }
-      };
-
-      const sociosRows = await bubbleGetAll<SocioRecord>(
-        "Socios",
-        [{ key: "Nome", constraint_type: "equals", value: userId }],
+      agfList = await bubbleGetAll<AgfRecord>(
+        "AGF",
+        [{ key: "Lista de Usuários", constraint_type: "contains", value: userId }],
         1000
-      ).catch(() => []);
+      );
 
-      const socioAgfIds = new Set<string>();
-      for (const row of sociosRows) {
-        const agfId = refToId(row.AGF);
-        if (agfId) socioAgfIds.add(agfId);
-      }
-
-      if (socioAgfIds.size > 0) {
-        const agfsFromSocios = await bubbleGetManyByIds<AgfRecord>("AGF", Array.from(socioAgfIds));
-        addAgfs(agfsFromSocios);
-      }
-
-      agfList = Array.from(agfMap.values());
       if (debugMode) {
         debugInfo.userId = userId;
-        debugInfo.userLookupAttempts = await bubbleTryUserLookups(userId);
-        debugInfo.userRecordFound = false;
+        debugInfo.accessMode = "agf_lista_de_usuarios";
+        debugInfo.agfQueryField = "Lista de Usuários";
+        debugInfo.userRecordFound = null;
         debugInfo.userRecordKeys = [];
         debugInfo.socioEmRaw = null;
-        debugInfo.socioEmRawType = "unavailable_via_data_api";
+        debugInfo.socioEmRawType = "not_used";
         debugInfo.socioEmIds = [];
         debugInfo.socioEmNames = [];
-        debugInfo.sociosRowsCount = sociosRows.length;
-        debugInfo.sociosAgfIds = Array.from(socioAgfIds);
+        debugInfo.matchedAgfCount = agfList.length;
+        debugInfo.matchedAgfIds = agfList.map((agf) => agf._id);
         debugInfo.resolvedAgfs = agfList.map((agf) => ({
           id: agf._id,
           nome: normAgfName((agf as any)["Nome da AGF"] || (agf as any).nome || (agf as any).name || agf._id),
+          listaDeUsuarios: Array.isArray(agf["Lista de Usuários"]) ? agf["Lista de Usuários"] : [],
         }));
       }
     } else {
