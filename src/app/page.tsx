@@ -85,6 +85,12 @@ const BENCHMARK_METRICS: Array<{ key: BenchmarkMetric; label: string }> = [
 ];
 
 const DEFAULT_TARGETS: SimulationTargets = {};
+const QUICK_SIMULATION_SCENARIOS = [
+  { categoria: "parcela_debitos", value: "0", label: "Parcelas em 0%" },
+  { categoria: "extras", value: "0", label: "Extras em 0%" },
+  { categoria: "folha_pagamento", value: "14", label: "Folha em 14%" },
+  { categoria: "comissoes", value: "10", label: "Comissoes em 10%" },
+];
 
 type ApiMonthData = {
   receita?: number;
@@ -233,9 +239,9 @@ const Card = ({
   valueColor?: string;
   subtitle?: string;
 }) => (
-  <div className="bg-card p-4 rounded-lg border-l-4" style={{ borderColor }}>
-    <h3 className="text-sm text-text/80 font-semibold">{title}</h3>
-    <p className={`text-2xl font-bold ${valueColor || "text-text"}`}>{value}</p>
+  <div className="bg-card p-3.5 rounded-lg border-l-4" style={{ borderColor }}>
+    <h3 className="text-[13px] text-text/80 font-semibold">{title}</h3>
+    <p className={`text-[1.85rem] leading-tight font-bold ${valueColor || "text-text"}`}>{value}</p>
     {subtitle ? <p className="text-xs text-text/60 mt-1">{subtitle}</p> : null}
   </div>
 );
@@ -253,9 +259,9 @@ const ChartContainer = ({
   chartMinWidth?: number;
   actions?: ReactElement;
 }) => (
-  <div className={`bg-card p-4 rounded-lg flex flex-col ${className}`}>
-    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
-      {title ? <h3 className="font-bold text-text">{title}</h3> : <span />}
+  <div className={`bg-card p-3.5 md:p-4 rounded-lg flex flex-col ${className}`}>
+    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between mb-3">
+      {title ? <h3 className="font-bold text-[1.05rem] text-text">{title}</h3> : <span />}
       {actions ?? null}
     </div>
     <div className="flex-grow h-full w-full overflow-x-auto overflow-y-hidden pb-2">
@@ -282,7 +288,7 @@ const SegmentedControl = <T extends string>({
       <button
         key={item.key}
         onClick={() => onChange(item.key)}
-        className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+        className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
           value === item.key ? "bg-primary text-white" : "bg-white/10 text-text/70 hover:bg-white/20"
         }`}
       >
@@ -333,7 +339,7 @@ const MultiSelectFilter = ({
     <div className="relative" ref={ref}>
       <button
         onClick={() => setIsOpen((previous) => !previous)}
-        className="bg-card border border-primary/50 text-white p-3 rounded-md focus:ring-2 focus:ring-primary w-full flex justify-between items-center"
+        className="bg-card border border-primary/50 text-white px-4 py-2.5 rounded-md focus:ring-2 focus:ring-primary w-full flex justify-between items-center text-sm"
       >
         <span>
           {name} ({selected.length === 0 ? "Todos" : selected.length})
@@ -384,6 +390,7 @@ export default function DashboardPage() {
   const [timelineMetric, setTimelineMetric] = useState<TimelineMetric>("resultado");
   const [benchmarkMetric, setBenchmarkMetric] = useState<BenchmarkMetric>("margem");
   const [simulationTargets, setSimulationTargets] = useState<SimulationTargets>(DEFAULT_TARGETS);
+  const [targetDraft, setTargetDraft] = useState<{ categoria: string; valor: string }>({ categoria: "", valor: "" });
   const [waterfallMode, setWaterfallMode] = useState<"consolidado" | "agf">("consolidado");
   const [waterfallAgfId, setWaterfallAgfId] = useState<string>("");
 
@@ -918,7 +925,7 @@ export default function DashboardPage() {
       waterfallBase,
       waterfallOptions,
       matrixRows,
-      agfChartMinWidth: Math.max(680, totaisPorAgf.length * 120),
+      agfChartMinWidth: Math.max(560, totaisPorAgf.length * 96),
     };
   }, [
     agfsSelecionadas,
@@ -948,18 +955,53 @@ export default function DashboardPage() {
     }
   }, [agfsSelecionadas, dadosProcessados.waterfallOptions, waterfallAgfId]);
 
+  useEffect(() => {
+    if (sourceCategorias.length === 0) return;
+    if (!targetDraft.categoria || !sourceCategorias.includes(targetDraft.categoria)) {
+      const nextCategoria = sourceCategorias[0];
+      setTargetDraft({ categoria: nextCategoria, valor: simulationTargets[nextCategoria] ?? "" });
+    }
+  }, [sourceCategorias, targetDraft.categoria, simulationTargets]);
+
   const handleMultiSelect = (setter: Function, value: any) =>
     setter((previous: any[]) => (previous.includes(value) ? previous.filter((item) => item !== value) : [...previous, value]));
 
   const setQuickTarget = (categoria: string, value: string) => {
     setSimulationTargets((previous) => ({ ...previous, [categoria]: value }));
+    setTargetDraft({ categoria, valor: value });
   };
 
-  const updateSimulationTarget = (categoria: string, value: string) => {
-    setSimulationTargets((previous) => ({ ...previous, [categoria]: value }));
+  const applySimulationTarget = () => {
+    const categoria = targetDraft.categoria;
+    const valor = String(targetDraft.valor || "").trim().replace(",", ".");
+
+    if (!categoria || !valor) return;
+
+    const parsed = safeNumber(valor);
+    if (!Number.isFinite(parsed) || parsed < 0) return;
+
+    setSimulationTargets((previous) => ({ ...previous, [categoria]: parsed.toString() }));
+    setTargetDraft((previous) => ({ ...previous, valor: parsed.toString() }));
   };
 
-  const tickStyle = { fill: "#E9F2FF", opacity: 0.75, fontSize: 11 };
+  const removeSimulationTarget = (categoria: string) => {
+    setSimulationTargets((previous) => {
+      const next = { ...previous };
+      delete next[categoria];
+      return next;
+    });
+
+    if (targetDraft.categoria === categoria) {
+      setTargetDraft((previous) => ({ ...previous, valor: "" }));
+    }
+  };
+
+  const clearSimulationTargets = () => {
+    setSimulationTargets(DEFAULT_TARGETS);
+    setTargetDraft((previous) => ({ ...previous, valor: "" }));
+  };
+
+  const tickStyle = { fill: "#E9F2FF", opacity: 0.72, fontSize: 10 };
 
   const timelineFormatter = timelineMetric === "margem" ? formatPercent : formatCurrency;
 
@@ -990,9 +1032,9 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 bg-background-start text-text min-h-screen">
-      <main className="max-w-7xl mx-auto flex flex-col gap-8">
-        <header className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div className="p-3 md:p-5 bg-background-start text-text min-h-screen">
+      <main className="max-w-[1520px] mx-auto flex flex-col gap-5">
+        <header className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <MultiSelectFilter
             name="AGF"
             options={sourceAgfs}
@@ -1016,7 +1058,7 @@ export default function DashboardPage() {
           />
         </header>
 
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card
             title="Resultado"
             value={formatCurrency(dadosProcessados.totaisGerais.resultado)}
@@ -1043,19 +1085,19 @@ export default function DashboardPage() {
           />
         </section>
 
-        <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
           {dadosProcessados.alertas.length === 0 ? (
-            <div className="bg-card rounded-lg p-4 text-text/70 md:col-span-2 xl:col-span-4">
+            <div className="bg-card rounded-lg p-3.5 text-sm text-text/70 md:col-span-2 xl:col-span-4">
               Nenhum alerta critico ou de atencao foi encontrado no filtro atual.
             </div>
           ) : (
             dadosProcessados.alertas.slice(0, 8).map((alerta, index) => (
-              <div key={`${alerta.agf}-${index}`} className="bg-card rounded-lg p-4 border border-white/10">
+              <div key={`${alerta.agf}-${index}`} className="bg-card rounded-lg p-3.5 border border-white/10">
                 <div className="flex items-start justify-between gap-3 mb-2">
                   <h3 className="font-semibold text-sm">{alerta.titulo}</h3>
                   <AlertBadge level={alerta.level} />
                 </div>
-                <p className="text-sm text-text/70 mb-2">{alerta.detalhe}</p>
+                <p className="text-[13px] leading-relaxed text-text/70 mb-2">{alerta.detalhe}</p>
                 <p className="text-xs text-text/50 uppercase tracking-wide">{alerta.agf}</p>
               </div>
             ))
@@ -1065,7 +1107,7 @@ export default function DashboardPage() {
         <section>
           <ChartContainer
             title="Resultado ao longo do tempo"
-            className="h-[360px]"
+            className="h-[300px]"
             actions={
               <SegmentedControl<TimelineMetric>
                 items={TIMELINE_METRICS}
@@ -1101,10 +1143,10 @@ export default function DashboardPage() {
           </ChartContainer>
         </section>
 
-        <section className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-          <div className="bg-card p-4 rounded-lg">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-text">Variacao mes contra mes</h3>
+        <section className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+          <div className="bg-card p-3.5 md:p-4 rounded-lg">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold text-[1.05rem] text-text">Variacao mes contra mes</h3>
               {dadosProcessados.resumoPeriodoAtual && dadosProcessados.resumoPeriodoAnterior ? (
                 <span className="text-xs text-text/60">
                   {dadosProcessados.resumoPeriodoAnterior.label} → {dadosProcessados.resumoPeriodoAtual.label}
@@ -1112,7 +1154,7 @@ export default function DashboardPage() {
               ) : null}
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[720px]">
+              <table className="w-full text-[13px] min-w-[680px]">
                 <thead>
                   <tr className="text-left text-text/70 border-b border-white/10">
                     <th className="py-2 px-2">AGF</th>
@@ -1158,7 +1200,7 @@ export default function DashboardPage() {
 
           <ChartContainer
             title="Benchmark vs Grupo"
-            className="h-[360px]"
+            className="h-[300px]"
             chartMinWidth={dadosProcessados.agfChartMinWidth}
             actions={
               <SegmentedControl<BenchmarkMetric>
@@ -1199,11 +1241,11 @@ export default function DashboardPage() {
           </ChartContainer>
         </section>
 
-        <section className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <ChartContainer title="Comparativo de Receita" className="h-[320px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <ChartContainer title="Comparativo de Receita" className="h-[285px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
             <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 20, left: -20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(233, 242, 255, 0.1)" />
-              <XAxis dataKey="nome" interval={0} angle={-25} textAnchor="end" height={72} tickMargin={10} tick={tickStyle} />
+              <XAxis dataKey="nome" interval={0} angle={-24} textAnchor="end" height={64} tickMargin={8} tick={tickStyle} />
               <YAxis hide />
               <Tooltip content={<CustomTooltip formatter={formatCurrency} />} />
               <Bar dataKey="receita" fill={CHART_COLORS.receita} name="Receita">
@@ -1211,10 +1253,10 @@ export default function DashboardPage() {
               </Bar>
             </BarChart>
           </ChartContainer>
-          <ChartContainer title="Comparativo de Despesa" className="h-[320px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
+          <ChartContainer title="Comparativo de Despesa" className="h-[285px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
             <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 20, left: -20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(233, 242, 255, 0.1)" />
-              <XAxis dataKey="nome" interval={0} angle={-25} textAnchor="end" height={72} tickMargin={10} tick={tickStyle} />
+              <XAxis dataKey="nome" interval={0} angle={-24} textAnchor="end" height={64} tickMargin={8} tick={tickStyle} />
               <YAxis hide />
               <Tooltip content={<CustomTooltip formatter={formatCurrency} />} />
               <Bar dataKey="despesaTotal" fill={CHART_COLORS.despesa} name="Despesa">
@@ -1222,10 +1264,10 @@ export default function DashboardPage() {
               </Bar>
             </BarChart>
           </ChartContainer>
-          <ChartContainer title="Comparativo de Resultado" className="h-[320px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
+          <ChartContainer title="Comparativo de Resultado" className="h-[285px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
             <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 20, left: -20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(233, 242, 255, 0.1)" />
-              <XAxis dataKey="nome" interval={0} angle={-25} textAnchor="end" height={72} tickMargin={10} tick={tickStyle} />
+              <XAxis dataKey="nome" interval={0} angle={-24} textAnchor="end" height={64} tickMargin={8} tick={tickStyle} />
               <YAxis hide />
               <Tooltip content={<CustomTooltip formatter={formatCurrency} />} />
               <Bar dataKey="resultado" fill={CHART_COLORS.resultado} name="Resultado">
@@ -1233,10 +1275,10 @@ export default function DashboardPage() {
               </Bar>
             </BarChart>
           </ChartContainer>
-          <ChartContainer title="Comparativo de Margem de Lucro (%)" className="h-[320px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
+          <ChartContainer title="Comparativo de Margem de Lucro (%)" className="h-[285px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
             <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 20, left: -20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(233, 242, 255, 0.1)" />
-              <XAxis dataKey="nome" interval={0} angle={-25} textAnchor="end" height={72} tickMargin={10} tick={tickStyle} />
+              <XAxis dataKey="nome" interval={0} angle={-24} textAnchor="end" height={64} tickMargin={8} tick={tickStyle} />
               <YAxis hide />
               <Tooltip content={<CustomTooltip formatter={formatPercent} />} />
               <Bar dataKey="margemLucro" fill={CHART_COLORS.margem} name="Margem">
@@ -1246,11 +1288,11 @@ export default function DashboardPage() {
           </ChartContainer>
         </section>
 
-        <section className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <ChartContainer title="Folha de Pagamento" className="h-[380px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <ChartContainer title="Folha de Pagamento" className="h-[320px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
             <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 20, left: -10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(233, 242, 255, 0.1)" />
-              <XAxis dataKey="nome" interval={0} angle={-25} textAnchor="end" height={72} tickMargin={10} tick={tickStyle} />
+              <XAxis dataKey="nome" interval={0} angle={-24} textAnchor="end" height={64} tickMargin={8} tick={tickStyle} />
               <YAxis tickFormatter={formatCompact} tick={tickStyle} />
               <Tooltip content={<CustomTooltip formatter={formatCurrency} />} />
               <Bar dataKey="despesasDetalhadas.folha_pagamento" fill={CHART_COLORS.folha} name="Folha de Pagamento">
@@ -1264,7 +1306,7 @@ export default function DashboardPage() {
             </BarChart>
           </ChartContainer>
 
-          <ChartContainer title="Matriz de Risco" className="h-[380px]">
+          <ChartContainer title="Matriz de Risco" className="h-[320px]">
             <ScatterChart margin={{ top: 10, right: 24, left: 8, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(233, 242, 255, 0.1)" />
               <XAxis type="number" dataKey="receita" tickFormatter={formatCompact} tick={tickStyle} name="Receita" />
@@ -1295,10 +1337,10 @@ export default function DashboardPage() {
           </ChartContainer>
         </section>
 
-        <section className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+        <section className="grid grid-cols-1 xl:grid-cols-2 gap-5">
           <ChartContainer
             title={`Waterfall de Resultado - ${dadosProcessados.waterfallBase.nome}`}
-            className="h-[420px]"
+            className="h-[350px]"
             chartMinWidth={Math.max(760, dadosProcessados.waterfallData.length * 96)}
             actions={
               <div className="flex flex-wrap gap-2 items-center">
@@ -1328,7 +1370,7 @@ export default function DashboardPage() {
           >
             <BarChart data={dadosProcessados.waterfallData} margin={{ top: 20, right: 20, left: 0, bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(233, 242, 255, 0.1)" />
-              <XAxis dataKey="name" interval={0} angle={-25} textAnchor="end" height={86} tick={tickStyle} />
+              <XAxis dataKey="name" interval={0} angle={-22} textAnchor="end" height={70} tick={tickStyle} />
               <YAxis tickFormatter={formatCompact} tick={tickStyle} />
               <Tooltip
                 content={({ active, payload }: any) => {
@@ -1359,9 +1401,9 @@ export default function DashboardPage() {
             </BarChart>
           </ChartContainer>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-card rounded-lg p-4">
-              <h3 className="font-bold mb-4">Ranking de Margem</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="bg-card rounded-lg p-3.5">
+              <h3 className="font-bold mb-3 text-[1.02rem]">Ranking de Margem</h3>
               <div className="space-y-3">
                 {dadosProcessados.rankingConsultivo.margem.map((item, index) => (
                   <div key={item.id} className="flex items-center justify-between text-sm">
@@ -1373,8 +1415,8 @@ export default function DashboardPage() {
                 ))}
               </div>
             </div>
-            <div className="bg-card rounded-lg p-4">
-              <h3 className="font-bold mb-4">Ranking de Folha Eficiente</h3>
+            <div className="bg-card rounded-lg p-3.5">
+              <h3 className="font-bold mb-3 text-[1.02rem]">Ranking de Folha Eficiente</h3>
               <div className="space-y-3">
                 {dadosProcessados.rankingConsultivo.folha.map((item, index) => (
                   <div key={item.id} className="flex items-center justify-between text-sm">
@@ -1386,8 +1428,8 @@ export default function DashboardPage() {
                 ))}
               </div>
             </div>
-            <div className="bg-card rounded-lg p-4">
-              <h3 className="font-bold mb-4">Ranking de Aluguel Critico</h3>
+            <div className="bg-card rounded-lg p-3.5">
+              <h3 className="font-bold mb-3 text-[1.02rem]">Ranking de Aluguel Critico</h3>
               <div className="space-y-3">
                 {dadosProcessados.rankingConsultivo.aluguel.map((item, index) => (
                   <div key={item.id} className="flex items-center justify-between text-sm">
@@ -1399,8 +1441,8 @@ export default function DashboardPage() {
                 ))}
               </div>
             </div>
-            <div className="bg-card rounded-lg p-4">
-              <h3 className="font-bold mb-4">Ranking de Passivo Oculto</h3>
+            <div className="bg-card rounded-lg p-3.5">
+              <h3 className="font-bold mb-3 text-[1.02rem]">Ranking de Passivo Oculto</h3>
               <div className="space-y-3">
                 {dadosProcessados.rankingConsultivo.risco.map((item, index) => (
                   <div key={item.id} className="flex items-center justify-between text-sm">
@@ -1415,11 +1457,11 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        <section className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="bg-card p-4 rounded-lg lg:col-span-1">
-            <h3 className="font-bold mb-4 text-text">Objetos tratados</h3>
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <div className="bg-card p-3.5 md:p-4 rounded-lg lg:col-span-1">
+            <h3 className="font-bold mb-3 text-[1.05rem] text-text">Objetos tratados</h3>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-[13px]">
                 <thead>
                   <tr className="text-left text-text/70 border-b border-white/10">
                     <th className="py-2 px-2">AGF</th>
@@ -1446,13 +1488,13 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="bg-card p-4 rounded-lg lg:col-span-2">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-text">Despesas por categoria</h3>
+          <div className="bg-card p-3.5 md:p-4 rounded-lg lg:col-span-2">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold text-[1.05rem] text-text">Despesas por categoria</h3>
               <span className="text-xs text-text/60">Heatmap por peso da despesa sobre a receita</span>
             </div>
             <div className="overflow-x-auto">
-              <table className="min-w-[1380px] w-full text-sm">
+              <table className="min-w-[1280px] w-full text-[13px]">
                 <thead>
                   <tr className="text-left text-text/70 border-b border-white/10">
                     <th className="py-2 px-2 whitespace-nowrap">AGF</th>
@@ -1492,11 +1534,11 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        <section className="bg-card p-4 rounded-lg">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between mb-4">
+        <section className="bg-card p-3.5 md:p-4 rounded-lg">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between mb-4">
             <div>
-              <h3 className="font-bold text-text">Simulacao de Margem de Lucro</h3>
-              <p className="text-sm text-text/70 mt-1">Combine exclusoes por categoria com cenarios consultivos.</p>
+              <h3 className="font-bold text-[1.05rem] text-text">Simulacao de Margem de Lucro</h3>
+              <p className="text-[13px] text-text/70 mt-1">Teste metas por categoria e veja o impacto direto na margem.</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-[280px]">
               <Card
@@ -1514,14 +1556,14 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="mb-5">
-            <p className="text-sm text-text/80 mb-2">Selecione despesas para excluir do calculo:</p>
+          <div className="mb-4">
+            <p className="text-[13px] text-text/80 mb-2">Selecione despesas para excluir do calculo:</p>
             <div className="flex flex-wrap gap-2">
               {sourceCategorias.map((categoria) => (
                 <button
                   key={categoria}
                   onClick={() => handleMultiSelect(setCategoriasExcluidas, categoria)}
-                  className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                  className={`px-3 py-1 text-[11px] rounded-full transition-colors ${
                     categoriasExcluidas.includes(categoria)
                       ? "bg-primary text-white"
                       : "bg-white/10 text-text/80 hover:bg-white/20"
@@ -1533,19 +1575,22 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="mb-5">
-            <p className="text-sm text-text/80 mb-2">Cenarios consultivos rapidos:</p>
+          <div className="mb-4">
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <p className="text-[13px] text-text/80">Cenarios consultivos rapidos:</p>
+              <button
+                onClick={clearSimulationTargets}
+                className="text-[11px] font-semibold text-text/60 hover:text-text transition-colors"
+              >
+                Limpar metas
+              </button>
+            </div>
             <div className="flex flex-wrap gap-2">
-              {[
-                { categoria: "parcela_debitos", value: "0", label: "Parcelas em 0%" },
-                { categoria: "extras", value: "0", label: "Extras em 0%" },
-                { categoria: "folha_pagamento", value: "14", label: "Folha em 14%" },
-                { categoria: "comissoes", value: "10", label: "Comissoes em 10%" },
-              ].map((scenarioButton) => (
+              {QUICK_SIMULATION_SCENARIOS.map((scenarioButton) => (
                 <button
                   key={`${scenarioButton.categoria}-${scenarioButton.value}`}
                   onClick={() => setQuickTarget(scenarioButton.categoria, scenarioButton.value)}
-                  className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                  className={`px-3 py-1 text-[11px] rounded-full transition-colors ${
                     simulationTargets[scenarioButton.categoria] === scenarioButton.value
                       ? "bg-amber-500 text-background-start"
                       : "bg-white/10 text-text/80 hover:bg-white/20"
@@ -1557,27 +1602,65 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="mb-5">
-            <p className="text-sm text-text/80 mb-2">Metas por categoria (% da receita):</p>
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
-              {["folha_pagamento", "comissoes", "aluguel", "extras", "impostos", "parcela_debitos"].map((categoria) => (
-                <label key={categoria} className="bg-white/5 border border-white/10 rounded-lg p-3 text-sm">
-                  <span className="block text-text/70 mb-2">{CATEGORY_LABELS[categoria] || categoria}</span>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      min="0"
-                      step="0.1"
-                      value={simulationTargets[categoria] ?? ""}
-                      onChange={(event) => updateSimulationTarget(categoria, event.target.value)}
-                      placeholder="Ex: 14"
-                      className="w-full bg-background-end border border-primary/30 rounded-md px-3 py-2 text-sm text-text"
-                    />
-                    <span className="text-text/60">%</span>
-                  </div>
-                </label>
-              ))}
+          <div className="mb-4">
+            <p className="text-[13px] text-text/80 mb-2">Meta por categoria (% da receita):</p>
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(220px,260px)_minmax(140px,180px)_auto] gap-3 items-end">
+              <label className="text-sm">
+                <span className="block text-text/70 mb-2">Categoria</span>
+                <select
+                  value={targetDraft.categoria}
+                  onChange={(event) =>
+                    setTargetDraft({
+                      categoria: event.target.value,
+                      valor: simulationTargets[event.target.value] ?? "",
+                    })
+                  }
+                  className="w-full bg-white/5 border border-white/10 rounded-md px-3 py-2.5 text-sm text-text"
+                >
+                  {sourceCategorias.map((categoria) => (
+                    <option key={categoria} value={categoria}>
+                      {CATEGORY_LABELS[categoria] || categoria}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm">
+                <span className="block text-text/70 mb-2">Meta (%)</span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.1"
+                    value={targetDraft.valor}
+                    onChange={(event) => setTargetDraft((previous) => ({ ...previous, valor: event.target.value }))}
+                    placeholder="Ex: 14"
+                    className="w-full bg-background-end border border-primary/30 rounded-md px-3 py-2.5 text-sm text-text"
+                  />
+                  <span className="text-text/60">%</span>
+                </div>
+              </label>
+              <button
+                onClick={applySimulationTarget}
+                className="h-[42px] px-4 rounded-md bg-primary text-white text-sm font-semibold hover:opacity-90 transition-opacity"
+              >
+                Aplicar meta
+              </button>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {Object.entries(simulationTargets)
+                .filter(([, value]) => String(value || "").trim() !== "")
+                .map(([categoria, value]) => (
+                  <button
+                    key={categoria}
+                    onClick={() => removeSimulationTarget(categoria)}
+                    className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] text-text/85 hover:bg-white/20 transition-colors"
+                  >
+                    <span>{CATEGORY_LABELS[categoria] || categoria}</span>
+                    <span className="font-semibold">{safeNumber(value).toFixed(1)}%</span>
+                    <span className="text-text/55">x</span>
+                  </button>
+                ))}
             </div>
             <p className="text-xs text-text/55 mt-3">
               A meta e sempre lida como percentual da receita. Exemplo: Folha em 14% significa projetar cada AGF com
@@ -1585,11 +1668,11 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <ChartContainer title="" className="h-[440px]" chartMinWidth={Math.max(720, dadosProcessados.totaisPorAgf.length * 90)}>
+          <ChartContainer title="" className="h-[360px]" chartMinWidth={Math.max(620, dadosProcessados.totaisPorAgf.length * 78)}>
             <BarChart data={dadosProcessados.totaisPorAgf} layout="vertical" margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(233, 242, 255, 0.1)" />
               <XAxis type="number" domain={[-100, 100]} tickFormatter={formatPercent} tick={tickStyle} />
-              <YAxis type="category" dataKey="nome" tick={tickStyle} width={150} />
+              <YAxis type="category" dataKey="nome" tick={tickStyle} width={130} />
               <Tooltip content={<CustomTooltip formatter={formatPercent} />} />
               <Legend wrapperStyle={{ fontSize: "12px", opacity: 0.85 }} />
               <Bar dataKey="margemLucroReal" stackId="a" fill={CHART_COLORS.margem} name="Margem Real">
