@@ -932,7 +932,7 @@ export default function DashboardPage() {
       waterfallBase,
       waterfallOptions,
       matrixRows,
-      agfChartMinWidth: Math.max(560, totaisPorAgf.length * 96),
+      agfChartMinWidth: Math.max(660, totaisPorAgf.length * 108),
     };
   }, [
     agfsSelecionadas,
@@ -1114,7 +1114,7 @@ export default function DashboardPage() {
         <section>
           <ChartContainer
             title="Resultado ao longo do tempo"
-            className="h-[180px]"
+            className="h-[265px]"
             actions={
               <SegmentedControl<TimelineMetric>
                 items={TIMELINE_METRICS}
@@ -1209,7 +1209,7 @@ export default function DashboardPage() {
 
           <ChartContainer
             title="Benchmark vs Grupo"
-            className="h-[200px]"
+            className="h-[270px]"
             chartMinWidth={dadosProcessados.agfChartMinWidth}
             actions={
               <SegmentedControl<BenchmarkMetric>
@@ -1253,46 +1253,46 @@ export default function DashboardPage() {
         </section>
 
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          <ChartContainer title="Comparativo de Receita" className="h-[200px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
+          <ChartContainer title="Comparativo de Receita" className="h-[255px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
             <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 20, left: -20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis dataKey="nome" interval={0} angle={-24} textAnchor="end" height={64} tickMargin={8} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
               <YAxis hide />
               <Tooltip content={<CustomTooltip formatter={formatCurrency} />} />
-              <Bar dataKey="receita" fill={CHART_COLORS.receita} name="Receita" barSize={16} radius={[3, 3, 0, 0]}>
+              <Bar dataKey="receita" fill={CHART_COLORS.receita} name="Receita" barSize={22} radius={[4, 4, 0, 0]}>
                 <LabelList dataKey="receita" position="top" formatter={(value: number) => formatCompact(value)} style={{ fill: "#EAE6DF", fontSize: 10, fontFamily: "Inter, sans-serif" }} />
               </Bar>
             </BarChart>
           </ChartContainer>
-          <ChartContainer title="Comparativo de Despesa" className="h-[200px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
+          <ChartContainer title="Comparativo de Despesa" className="h-[255px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
             <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 20, left: -20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis dataKey="nome" interval={0} angle={-24} textAnchor="end" height={64} tickMargin={8} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
               <YAxis hide />
               <Tooltip content={<CustomTooltip formatter={formatCurrency} />} />
-              <Bar dataKey="despesaTotal" fill={CHART_COLORS.despesa} name="Despesa" barSize={16} radius={[3, 3, 0, 0]}>
+              <Bar dataKey="despesaTotal" fill={CHART_COLORS.despesa} name="Despesa" barSize={22} radius={[4, 4, 0, 0]}>
                 <LabelList dataKey="despesaTotal" position="top" formatter={(value: number) => formatCompact(value)} style={{ fill: "#EAE6DF", fontSize: 10, fontFamily: "Inter, sans-serif" }} />
               </Bar>
             </BarChart>
           </ChartContainer>
-          <ChartContainer title="Comparativo de Resultado" className="h-[200px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
+          <ChartContainer title="Comparativo de Resultado" className="h-[255px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
             <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 20, left: -20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis dataKey="nome" interval={0} angle={-24} textAnchor="end" height={64} tickMargin={8} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
               <YAxis hide />
               <Tooltip content={<CustomTooltip formatter={formatCurrency} />} />
-              <Bar dataKey="resultado" fill={CHART_COLORS.resultado} name="Resultado" barSize={16} radius={[3, 3, 0, 0]}>
+              <Bar dataKey="resultado" fill={CHART_COLORS.resultado} name="Resultado" barSize={22} radius={[4, 4, 0, 0]}>
                 <LabelList dataKey="resultado" position="top" formatter={(value: number) => formatCompact(value)} style={{ fill: "#EAE6DF", fontSize: 10, fontFamily: "Inter, sans-serif" }} />
               </Bar>
             </BarChart>
           </ChartContainer>
-          <ChartContainer title="Comparativo de Margem de Lucro (%)" className="h-[200px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
+          <ChartContainer title="Comparativo de Margem de Lucro (%)" className="h-[255px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
             <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 20, left: -20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis dataKey="nome" interval={0} angle={-24} textAnchor="end" height={64} tickMargin={8} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
               <YAxis hide />
               <Tooltip content={<CustomTooltip formatter={formatPercent} />} />
-              <Bar dataKey="margemLucro" fill={CHART_COLORS.margem} name="Margem" barSize={16} radius={[3, 3, 0, 0]}>
+              <Bar dataKey="margemLucro" fill={CHART_COLORS.margem} name="Margem" barSize={22} radius={[4, 4, 0, 0]}>
                 <LabelList dataKey="margemLucro" position="top" formatter={(value: number) => formatPercent(value)} style={{ fill: "#EAE6DF", fontSize: 10, fontFamily: "Inter, sans-serif" }} />
               </Bar>
             </BarChart>
@@ -1300,13 +1300,13 @@ export default function DashboardPage() {
         </section>
 
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          <ChartContainer title="Folha de Pagamento" className="h-[200px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
+          <ChartContainer title="Folha de Pagamento" className="h-[285px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
             <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 20, left: -10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis dataKey="nome" interval={0} angle={-24} textAnchor="end" height={64} tickMargin={8} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
               <YAxis tickFormatter={formatCompact} tick={tickStyle} tickLine={false} axisLine={false} />
               <Tooltip content={<CustomTooltip formatter={formatCurrency} />} />
-              <Bar dataKey="despesasDetalhadas.folha_pagamento" fill={CHART_COLORS.folha} name="Folha de Pagamento" barSize={16} radius={[3, 3, 0, 0]}>
+              <Bar dataKey="despesasDetalhadas.folha_pagamento" fill={CHART_COLORS.folha} name="Folha de Pagamento" barSize={22} radius={[4, 4, 0, 0]}>
                 <LabelList
                   dataKey="despesasDetalhadas.folha_pagamento"
                   position="top"
@@ -1317,12 +1317,12 @@ export default function DashboardPage() {
             </BarChart>
           </ChartContainer>
 
-          <ChartContainer title="Matriz de Risco" className="h-[200px]">
+          <ChartContainer title="Matriz de Risco" className="h-[285px]">
             <ScatterChart margin={{ top: 10, right: 24, left: 8, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
               <XAxis type="number" dataKey="receita" tickFormatter={formatCompact} tick={tickStyle} name="Receita" tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
               <YAxis type="number" dataKey="margem" tickFormatter={formatPercent} tick={tickStyle} name="Margem" tickLine={false} axisLine={false} />
-              <ZAxis type="number" dataKey="z" range={[60, 240]} />
+              <ZAxis type="number" dataKey="z" range={[70, 320]} />
               <ReferenceLine y={0} stroke="rgba(255,255,255,0.15)" strokeDasharray="4 4" />
               <Tooltip
                 cursor={{ strokeDasharray: "4 4" }}
@@ -1351,8 +1351,8 @@ export default function DashboardPage() {
         <section className="grid grid-cols-1 xl:grid-cols-2 gap-3">
           <ChartContainer
             title={`Waterfall de Resultado - ${dadosProcessados.waterfallBase.nome}`}
-            className="h-[210px]"
-            chartMinWidth={Math.max(580, dadosProcessados.waterfallData.length * 76)}
+            className="h-[330px]"
+            chartMinWidth={Math.max(660, dadosProcessados.waterfallData.length * 90)}
             actions={
               <div className="flex flex-wrap gap-2 items-center">
                 <SegmentedControl<"consolidado" | "agf">
@@ -1398,7 +1398,7 @@ export default function DashboardPage() {
                 }}
               />
               <Bar dataKey="base" stackId="waterfall" fill="transparent" isAnimationActive={false} />
-              <Bar dataKey="value" stackId="waterfall" name="Impacto" isAnimationActive={false} barSize={18}>
+              <Bar dataKey="value" stackId="waterfall" name="Impacto" isAnimationActive={false} barSize={24}>
                 {dadosProcessados.waterfallData.map((item) => (
                   <Cell key={item.name} fill={item.fill} />
                 ))}
@@ -1689,17 +1689,17 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <ChartContainer title="" className="h-[200px]" chartMinWidth={Math.max(620, dadosProcessados.totaisPorAgf.length * 78)}>
+          <ChartContainer title="" className="h-[290px]" chartMinWidth={Math.max(700, dadosProcessados.totaisPorAgf.length * 92)}>
             <BarChart data={dadosProcessados.totaisPorAgf} layout="vertical" margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis type="number" domain={[-100, 100]} tickFormatter={formatPercent} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
               <YAxis type="category" dataKey="nome" tick={tickStyle} width={130} tickLine={false} axisLine={false} />
               <Tooltip content={<CustomTooltip formatter={formatPercent} />} />
               <Legend wrapperStyle={{ fontFamily: "Inter, sans-serif", fontSize: "11px", color: "#8B9ABF" }} />
-              <Bar dataKey="margemLucroReal" stackId="a" fill={CHART_COLORS.margem} name="Margem Real" barSize={16}>
+              <Bar dataKey="margemLucroReal" stackId="a" fill={CHART_COLORS.margem} name="Margem Real" barSize={22}>
                 <LabelList dataKey="margemLucroReal" position="center" formatter={(value: number) => formatPercent(value)} style={{ fill: "#EAE6DF", fontSize: 11, fontFamily: "Inter, sans-serif" }} />
               </Bar>
-              <Bar dataKey="ganhoMargem" stackId="a" fill={CHART_COLORS.warning} name="Ganho de Margem" barSize={16}>
+              <Bar dataKey="ganhoMargem" stackId="a" fill={CHART_COLORS.warning} name="Ganho de Margem" barSize={22}>
                 <LabelList
                   dataKey="ganhoMargem"
                   position="center"
