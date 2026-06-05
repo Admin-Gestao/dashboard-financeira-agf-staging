@@ -6,35 +6,39 @@
 
 @layer base {
   :root {
-    --bg-base: #010440;
-    --bg-surface: #020654;
-    --bg-elevated: #030870;
+    --bg-base: #010326;
+    --bg-surface: #020540;
+    --bg-elevated: #030960;
+    --bg-input: #02062e;
     --bg-overlay: rgba(2, 6, 84, 0.6);
 
-    --border-subtle: rgba(242, 167, 92, 0.1);
-    --border-medium: rgba(242, 167, 92, 0.22);
-    --border-strong: rgba(242, 167, 92, 0.45);
+    --border-subtle: rgba(180, 160, 100, 0.12);
+    --border-medium: rgba(180, 160, 100, 0.28);
+    --border-strong: rgba(180, 160, 100, 0.55);
 
-    --accent: #c8861a;
-    --accent-soft: rgba(200, 134, 26, 0.15);
-    --accent-muted: rgba(200, 134, 26, 0.08);
+    --accent: #a67c3a;
+    --accent-bright: #c49b52;
+    --accent-soft: rgba(166, 124, 58, 0.14);
+    --accent-muted: rgba(166, 124, 58, 0.07);
+    --accent-text: #d4aa6a;
 
-    --positive: #2dd4a0;
-    --positive-soft: rgba(45, 212, 160, 0.1);
-    --negative: #e05c6a;
-    --negative-soft: rgba(224, 92, 106, 0.1);
-    --warning: #d4a853;
-    --warning-soft: rgba(212, 168, 83, 0.1);
-    --neutral: #6b85c4;
-    --neutral-soft: rgba(107, 133, 196, 0.1);
+    --positive: #27b08b;
+    --positive-soft: rgba(39, 176, 139, 0.12);
+    --negative: #d95f6e;
+    --negative-soft: rgba(217, 95, 110, 0.12);
+    --warning: #c49b52;
+    --warning-soft: rgba(196, 155, 82, 0.12);
+    --neutral: #5e7fc4;
+    --neutral-soft: rgba(94, 127, 196, 0.12);
 
-    --text-primary: #f0ede8;
-    --text-secondary: #9ba8c7;
-    --text-muted: #5c6b8a;
-    --text-accent: #c8861a;
+    --text-primary: #eae6df;
+    --text-secondary: #8b9abf;
+    --text-muted: #4a5878;
+    --text-accent: #d4aa6a;
+    --text-on-accent: #010326;
 
-    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--border-subtle);
-    --shadow-elevated: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--border-medium);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--border-subtle);
+    --shadow-md: 0 3px 12px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--border-medium);
   }
 }
 
@@ -42,12 +46,17 @@
   body {
     @apply min-h-screen text-text font-sans;
     background:
-      radial-gradient(circle at top left, rgba(200, 134, 26, 0.09), transparent 20%),
-      radial-gradient(circle at top right, rgba(107, 133, 196, 0.08), transparent 24%),
-      linear-gradient(180deg, #010440 0%, #020654 52%, #030870 100%);
+      radial-gradient(circle at top left, rgba(166, 124, 58, 0.08), transparent 20%),
+      radial-gradient(circle at top right, rgba(94, 127, 196, 0.08), transparent 24%),
+      linear-gradient(180deg, #010326 0%, #020540 56%, #030960 100%);
     letter-spacing: -0.01em;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+  }
+
+  body,
+  * {
+    font-family: "Inter", sans-serif;
   }
 
   * {
@@ -80,7 +89,7 @@
     @apply rounded-[10px];
     background: var(--bg-surface);
     border: 1px solid var(--border-subtle);
-    box-shadow: var(--shadow-card);
+    box-shadow: var(--shadow-sm);
   }
 
   .dashboard-muted-surface {
@@ -91,11 +100,58 @@
 
   .dashboard-surface-hover:hover {
     border-color: var(--border-medium);
-    box-shadow: var(--shadow-elevated);
+    box-shadow: var(--shadow-md);
     transform: translateY(-1px);
+  }
+
+  .chart-title,
+  .panel-title,
+  h2,
+  h3 {
+    font-family: "DM Serif Display", serif;
+    font-style: italic;
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+  }
+
+  .kpi-label {
+    font-family: "Inter", sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+
+  .kpi-value {
+    font-family: "Inter", sans-serif;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
   }
 
   .tabular {
     font-variant-numeric: tabular-nums;
+  }
+
+  input,
+  select,
+  textarea {
+    font-family: "Inter", sans-serif !important;
+    font-size: 12px !important;
+    background: var(--bg-input) !important;
+    border: 1px solid var(--border-subtle) !important;
+    color: var(--text-primary) !important;
+    border-radius: 6px !important;
+  }
+
+  input:focus,
+  select:focus,
+  textarea:focus {
+    border-color: var(--border-strong) !important;
+    outline: none !important;
   }
 }
