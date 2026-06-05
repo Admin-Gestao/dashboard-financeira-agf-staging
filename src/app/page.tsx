@@ -1,57 +1,247 @@
 "use client";
 
-import { useState, useMemo, ReactElement, useRef, useEffect } from "react";
+import { ReactElement, useEffect, useMemo, useRef, useState } from "react";
 import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer, PieChart, Pie, Cell, LabelList
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  LabelList,
+  Legend,
+  ReferenceLine,
+  ResponsiveContainer,
+  Scatter,
+  ScatterChart,
+  Tooltip,
+  XAxis,
+  YAxis,
+  ZAxis,
 } from "recharts";
 import { ChevronDown } from "lucide-react";
 
-/* ===================== MOCK (fallback) ===================== */
+type TimelineMetric = "resultado" | "receita" | "despesa" | "margem";
+type BenchmarkMetric = "margem" | "folha" | "aluguel" | "despesa" | "parcelas";
+
+type ScenarioState = {
+  zerarParcelas: boolean;
+  zerarExtras: boolean;
+  folhaMeta14: boolean;
+  aluguel20: boolean;
+};
+
+const ALL_MONTHS = Array.from({ length: 12 }, (_, index) => index + 1);
+const MONTH_LABELS = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
+const ALERT_LIMITS = {
+  quedaReceitaPct: -30,
+  margemCriticaPct: 10,
+  folhaPct: 20,
+  aluguelPct: 20,
+  despesaPct: 90,
+  extrasPct: 15,
+  parcelasPct: 10,
+};
+
+const RISK_COLORS = {
+  low: "#48DB8A",
+  medium: "#F2C14E",
+  high: "#FF6B57",
+};
+
+const CHART_COLORS = {
+  receita: "#4AA8FF",
+  despesa: "#FF6B57",
+  resultado: "#48DB8A",
+  margem: "#A974F8",
+  objetos: "#F2C14E",
+  folha: "#4472CA",
+  parcela: "#F97316",
+  extras: "#D97706",
+  warning: "#F2C14E",
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  aluguel: "Aluguel",
+  comissoes: "Comissoes",
+  extras: "Extras",
+  honorarios: "Honorarios",
+  impostos: "Impostos",
+  parcela_debitos: "Parcela Debitos",
+  pitney: "Pitney",
+  telefone: "Telefone",
+  veiculos: "Veiculos",
+  folha_pagamento: "Folha",
+};
+
+const TIMELINE_METRICS: Array<{ key: TimelineMetric; label: string }> = [
+  { key: "resultado", label: "Resultado" },
+  { key: "receita", label: "Receita" },
+  { key: "despesa", label: "Despesa" },
+  { key: "margem", label: "Margem" },
+];
+
+const BENCHMARK_METRICS: Array<{ key: BenchmarkMetric; label: string }> = [
+  { key: "margem", label: "Margem" },
+  { key: "folha", label: "Folha/Rec" },
+  { key: "aluguel", label: "Aluguel/Rec" },
+  { key: "despesa", label: "Despesa/Rec" },
+  { key: "parcelas", label: "Parcelas/Rec" },
+];
+
+const DEFAULT_SCENARIO: ScenarioState = {
+  zerarParcelas: false,
+  zerarExtras: false,
+  folhaMeta14: false,
+  aluguel20: false,
+};
+
+type ApiMonthData = {
+  receita?: number;
+  objetos?: number;
+  despesa_total?: number;
+  despesas?: Record<string, number>;
+  despesa_subcontas_total?: number;
+  folha_sem_descricao?: number;
+};
+
+type ApiData = {
+  agfs: Array<{ id: string; nome: string }>;
+  categoriasDespesa: string[];
+  dados: Record<string, Record<string, Record<string, ApiMonthData>>>;
+};
+
 const generateMockData = (agfs: string[], anos: number[], meses: number[]) => {
-  const data: any = {};
+  const data: ApiData["dados"] = {};
+
   for (const ano of anos) {
     data[ano] = {};
     for (const mes of meses) {
       data[ano][mes] = {};
+
       for (const agf of agfs) {
-        const baseReceita = 50000 + Math.random() * 25000;
-        const receita = baseReceita * (1 + (Math.random() - 0.5) * 0.2);
+        const receita = 60000 + Math.random() * 40000;
+        const aluguel = receita * (0.05 + Math.random() * 0.08);
+        const comissoes = receita * (0.03 + Math.random() * 0.08);
+        const extras = receita * (0.01 + Math.random() * 0.1);
+        const impostos = receita * (0.05 + Math.random() * 0.08);
+        const telefone = receita * 0.01;
+        const honorarios = receita * 0.02;
+        const pitney = receita * 0.015;
+        const veiculos = receita * 0.025;
+        const folha = receita * (0.11 + Math.random() * 0.12);
+        const parcelaDebitos = Math.random() > 0.85 ? receita * 0.14 : 0;
+        const despesaTotal =
+          aluguel +
+          comissoes +
+          extras +
+          impostos +
+          telefone +
+          honorarios +
+          pitney +
+          veiculos +
+          folha +
+          parcelaDebitos;
+
         data[ano][mes][agf] = {
           receita,
-          objetos: Math.floor((receita / 4) * (1 + (Math.random() - 0.5) * 0.1)),
-          despesa_total: receita * 0.6,
+          objetos: Math.floor(receita / 3.8),
+          despesa_total: despesaTotal,
           despesas: {
-            aluguel: receita * 0.08, comissoes: receita * 0.05, extras: receita * 0.02,
-            folha_pagamento: receita * 0.35, impostos: receita * 0.1, veiculos: receita * 0.12,
-            telefone: receita * 0.01, honorarios: receita * 0.03, pitney: receita * 0.015,
+            aluguel,
+            comissoes,
+            extras,
+            honorarios,
+            impostos,
+            parcela_debitos: parcelaDebitos,
+            pitney,
+            telefone,
+            veiculos,
+            folha_pagamento: folha,
           },
-          despesa_subcontas_total: receita * 0.66
+          despesa_subcontas_total: despesaTotal,
+          folha_sem_descricao: parcelaDebitos > 0 ? receita * 0.02 : 0,
         };
       }
     }
   }
+
   return data;
 };
-const agfList = [
-  { id: "cl", nome: "Campo Limpo" },
+
+const mockAgfs = [
+  { id: "sj", nome: "Sao Jorge" },
+  { id: "mr", nome: "Marajoara" },
+  { id: "pl", nome: "Parque do Lago" },
   { id: "rp", nome: "Republica" },
-  { id: "sj", nome: "São Jorge" },
-  { id: "st", nome: "Senador Teotônio" }
 ];
-const anoList = [2023, 2024, 2025];
-const mesList = Array.from({ length: 12 }, (_, i) => i + 1);
-const mockApiData = {
-  agfs: agfList,
-  categoriasDespesa: ["aluguel","comissoes","extras","honorarios","impostos","pitney","telefone","veiculos","folha_pagamento"],
-  dados: generateMockData(agfList.map((a) => a.nome), anoList, mesList),
+
+const mockApiData: ApiData = {
+  agfs: mockAgfs,
+  categoriasDespesa: [
+    "aluguel",
+    "comissoes",
+    "extras",
+    "honorarios",
+    "impostos",
+    "parcela_debitos",
+    "pitney",
+    "telefone",
+    "veiculos",
+    "folha_pagamento",
+  ],
+  dados: generateMockData(
+    mockAgfs.map((item) => item.nome),
+    [2025, 2026],
+    ALL_MONTHS
+  ),
 };
 
-/* ===================== UI ===================== */
-const Card = ({ title, value, borderColor, valueColor }: { title: string; value: string; borderColor: string; valueColor?: string; }) => (
+const formatCurrency = (value: number) =>
+  Number(value ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const formatPercent = (value: number) => `${Number(value ?? 0).toFixed(1)}%`;
+const formatNumber = (value: number) => Number(value ?? 0).toLocaleString("pt-BR");
+const formatCompact = (value: number) => Number(value ?? 0).toLocaleString("pt-BR", { notation: "compact" });
+const ratio = (value: number, base: number) => (base > 0 ? (value / base) * 100 : 0);
+
+function pctChange(current: number, previous: number) {
+  if (!previous && !current) return 0;
+  if (!previous) return 100;
+  return ((current - previous) / previous) * 100;
+}
+
+function median(values: number[]) {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle];
+}
+
+function normalizeForCompare(value: string) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toUpperCase();
+}
+
+const Card = ({
+  title,
+  value,
+  borderColor,
+  valueColor,
+  subtitle,
+}: {
+  title: string;
+  value: string;
+  borderColor: string;
+  valueColor?: string;
+  subtitle?: string;
+}) => (
   <div className="bg-card p-4 rounded-lg border-l-4" style={{ borderColor }}>
     <h3 className="text-sm text-text/80 font-semibold">{title}</h3>
     <p className={`text-2xl font-bold ${valueColor || "text-text"}`}>{value}</p>
+    {subtitle ? <p className="text-xs text-text/60 mt-1">{subtitle}</p> : null}
   </div>
 );
 
@@ -60,39 +250,79 @@ const ChartContainer = ({
   children,
   className = "",
   chartMinWidth,
+  actions,
 }: {
   title: string;
   children: ReactElement;
   className?: string;
   chartMinWidth?: number;
+  actions?: ReactElement;
 }) => (
   <div className={`bg-card p-4 rounded-lg flex flex-col ${className}`}>
-    {title ? <h3 className="font-bold mb-4 text-text">{title}</h3> : null}
+    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
+      {title ? <h3 className="font-bold text-text">{title}</h3> : <span />}
+      {actions ?? null}
+    </div>
     <div className="flex-grow h-full w-full overflow-x-auto overflow-y-hidden pb-2">
       <div className="h-full" style={chartMinWidth ? { minWidth: `${chartMinWidth}px` } : undefined}>
-        <ResponsiveContainer width="100%" height="100%">{children}</ResponsiveContainer>
+        <ResponsiveContainer width="100%" height="100%">
+          {children}
+        </ResponsiveContainer>
       </div>
     </div>
   </div>
 );
 
+const SegmentedControl = <T extends string>({
+  items,
+  value,
+  onChange,
+}: {
+  items: Array<{ key: T; label: string }>;
+  value: T;
+  onChange: (value: T) => void;
+}) => (
+  <div className="inline-flex flex-wrap gap-2">
+    {items.map((item) => (
+      <button
+        key={item.key}
+        onClick={() => onChange(item.key)}
+        className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+          value === item.key ? "bg-primary text-white" : "bg-white/10 text-text/70 hover:bg-white/20"
+        }`}
+      >
+        {item.label}
+      </button>
+    ))}
+  </div>
+);
+
 const CustomTooltip = ({ active, payload, label, formatter }: any) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-background-end p-2 border border-primary/50 rounded-md text-sm">
-        <p className="label font-bold">{`${label}`}</p>
-        {payload.map((pld: any, index: number) => (
-          <p key={index} style={{ color: pld.fill || pld.stroke }}>{`${pld.name}: ${formatter(Number(pld.value ?? 0))}`}</p>
-        ))}
-      </div>
-    );
-  }
-  return null;
+  if (!active || !payload?.length) return null;
+
+  return (
+    <div className="bg-background-end p-3 border border-primary/50 rounded-md text-sm shadow-lg">
+      <p className="font-bold mb-1">{label}</p>
+      {payload.map((item: any, index: number) => (
+        <p key={index} style={{ color: item.color || item.fill || item.stroke }}>
+          {item.name}: {formatter ? formatter(Number(item.value ?? 0)) : item.value}
+        </p>
+      ))}
+    </div>
+  );
 };
 
 const MultiSelectFilter = ({
-  name, options, selected, onSelect
-}: { name: string; options: { id: any; nome: string }[]; selected: any[]; onSelect: (id: any) => void; }) => {
+  name,
+  options,
+  selected,
+  onSelect,
+}: {
+  name: string;
+  options: { id: any; nome: string }[];
+  selected: any[];
+  onSelect: (id: any) => void;
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -102,326 +332,1068 @@ const MultiSelectFilter = ({
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [ref]);
- 
+  }, []);
 
   return (
     <div className="relative" ref={ref}>
-      <button onClick={() => setIsOpen(!isOpen)} className="bg-card border border-primary/50 text-white p-2 rounded-md focus:ring-2 focus:ring-primary w-full flex justify-between items-center">
-        <span>{name} ({selected.length === 0 ? "Todos" : selected.length})</span>
+      <button
+        onClick={() => setIsOpen((previous) => !previous)}
+        className="bg-card border border-primary/50 text-white p-3 rounded-md focus:ring-2 focus:ring-primary w-full flex justify-between items-center"
+      >
+        <span>
+          {name} ({selected.length === 0 ? "Todos" : selected.length})
+        </span>
         <ChevronDown size={16} />
       </button>
-      {isOpen && (
+      {isOpen ? (
         <div className="absolute z-10 top-full mt-1 w-full bg-card border border-primary/50 rounded-md max-h-60 overflow-y-auto">
           {options.map((option) => (
             <label key={option.id} className="flex items-center gap-2 p-2 hover:bg-primary/20 cursor-pointer">
-              <input type="checkbox" checked={selected.includes(option.id)} onChange={() => onSelect(option.id)} className="form-checkbox h-4 w-4 text-primary bg-card border-primary/50 rounded focus:ring-primary" />
+              <input
+                type="checkbox"
+                checked={selected.includes(option.id)}
+                onChange={() => onSelect(option.id)}
+                className="form-checkbox h-4 w-4 text-primary bg-card border-primary/50 rounded focus:ring-primary"
+              />
               <span>{option.nome}</span>
             </label>
           ))}
         </div>
-      )}
+      ) : null}
     </div>
   );
 };
 
-/* ===================== PAGE ===================== */
+const AlertBadge = ({ level }: { level: "high" | "medium" | "low" }) => {
+  const classes =
+    level === "high"
+      ? "bg-red-500/20 text-red-200 border-red-400/40"
+      : level === "medium"
+        ? "bg-amber-500/20 text-amber-200 border-amber-400/40"
+        : "bg-emerald-500/20 text-emerald-200 border-emerald-400/40";
+
+  const label = level === "high" ? "Critico" : level === "medium" ? "Atencao" : "Monitorar";
+
+  return <span className={`text-[11px] font-semibold uppercase px-2 py-1 rounded-full border ${classes}`}>{label}</span>;
+};
+
 export default function DashboardPage() {
   const [empresaId, setEmpresaId] = useState<string | null>(null);
-  const [apiData, setApiData] = useState<any>(null);
+  const [apiData, setApiData] = useState<ApiData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [agfsSelecionadas, setAgfsSelecionadas] = useState<string[]>([]);
+  const [mesesSelecionados, setMesesSelecionados] = useState<number[]>([]);
+  const [anosSelecionados, setAnosSelecionados] = useState<number[]>([]);
+  const [categoriasExcluidas, setCategoriasExcluidas] = useState<string[]>([]);
+  const [timelineMetric, setTimelineMetric] = useState<TimelineMetric>("resultado");
+  const [benchmarkMetric, setBenchmarkMetric] = useState<BenchmarkMetric>("margem");
+  const [scenario, setScenario] = useState<ScenarioState>(DEFAULT_SCENARIO);
+  const [waterfallMode, setWaterfallMode] = useState<"consolidado" | "agf">("consolidado");
+  const [waterfallAgfId, setWaterfallAgfId] = useState<string>("");
 
-useEffect(() => {
-  if (typeof window !== "undefined") {
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
     const params = new URLSearchParams(window.location.search);
-    // Preferir filtro por sócio (user_id). Mantém compatibilidade com empresa_id.
     const userId = params.get("user_id");
     const empresa = params.get("empresa_id");
     const id = userId ?? empresa;
+
     if (id) setEmpresaId(id);
     else setLoading(false);
-  }
-}, []);
-
+  }, []);
 
   useEffect(() => {
     if (!empresaId) return;
+
     (async () => {
       try {
         setLoading(true);
         setError(null);
-        // Se a URL tiver user_id, repassamos esse mesmo parâmetro para a API.
-// Caso contrário, continuamos aceitando empresa_id (compat).
-const hasUserId =
-  typeof window !== "undefined" &&
-  new URLSearchParams(window.location.search).has("user_id");
 
-const queryParam = hasUserId ? "user_id" : "empresa_id";
+        const hasUserId =
+          typeof window !== "undefined" && new URLSearchParams(window.location.search).has("user_id");
+        const queryParam = hasUserId ? "user_id" : "empresa_id";
 
-const res = await fetch(`/api/dash-data?${queryParam}=${encodeURIComponent(empresaId)}`, {
-  cache: "no-store",
-});
+        const response = await fetch(`/api/dash-data?${queryParam}=${encodeURIComponent(empresaId)}`, {
+          cache: "no-store",
+        });
 
-        if (!res.ok) throw new Error(`A API retornou o status ${res.status}`);
-        const json = await res.json();
+        if (!response.ok) {
+          throw new Error(`A API retornou o status ${response.status}`);
+        }
+
+        const json = await response.json();
         if (json.error) throw new Error(json.error);
         setApiData(json);
-      } catch (e: any) {
-        setError(`Falha ao carregar dados: ${e.message}`);
+      } catch (fetchError: any) {
+        setError(`Falha ao carregar dados: ${fetchError.message}`);
       } finally {
         setLoading(false);
       }
     })();
   }, [empresaId]);
 
-  const [agfsSelecionadas, setAgfsSelecionadas] = useState<string[]>([]);
-  const [mesesSelecionados, setMesesSelecionados] = useState<number[]>([]);
-  const [anosSelecionados, setAnosSelecionados] = useState<number[]>([]);
-  const [categoriasExcluidas, setCategoriasExcluidas] = useState<string[]>([]); // categorias a REMOVER da simulação
-
   const sourceData = apiData || mockApiData;
-  const { agfs: sourceAgfs, categoriasDespesa: sourceCategorias, dados: sourceDados } = sourceData;
+  const sourceAgfs = sourceData.agfs || [];
+  const sourceCategorias = sourceData.categoriasDespesa || [];
+  const sourceDados = sourceData.dados || {};
 
   const anosDisponiveis = useMemo(() => {
-    const anos = sourceDados ? Object.keys(sourceDados).map(Number) : anoList;
-    return anos.sort((a, b) => a - b);
+    return Object.keys(sourceDados)
+      .map(Number)
+      .sort((a, b) => a - b);
+  }, [sourceDados]);
+
+  const mesesDisponiveis = useMemo(() => {
+    const meses = new Set<number>();
+    for (const ano of Object.keys(sourceDados)) {
+      for (const mes of Object.keys(sourceDados[ano] || {})) {
+        meses.add(Number(mes));
+      }
+    }
+    return Array.from(meses).sort((a, b) => a - b);
   }, [sourceDados]);
 
   const dadosProcessados = useMemo(() => {
-    const idsAgf = agfsSelecionadas.length > 0 ? agfsSelecionadas : sourceAgfs.map((a: any) => a.id);
-    const anos = anosSelecionados.length > 0 ? anosSelecionados : anosDisponiveis;
-    const meses = mesesSelecionados.length > 0 ? mesesSelecionados : mesList;
-    const agfsFiltradas = sourceAgfs.filter((a: any) => idsAgf.includes(a.id));
+    const agfIdsSelecionadas = agfsSelecionadas.length > 0 ? agfsSelecionadas : sourceAgfs.map((agf) => agf.id);
+    const anosSelecionadosOrdenados =
+      anosSelecionados.length > 0 ? [...anosSelecionados].sort((a, b) => a - b) : anosDisponiveis;
+    const mesesOrdenados =
+      mesesSelecionados.length > 0 ? [...mesesSelecionados].sort((a, b) => a - b) : mesesDisponiveis.length > 0 ? mesesDisponiveis : ALL_MONTHS;
+    const agfsFiltradas = sourceAgfs.filter((agf) => agfIdsSelecionadas.includes(agf.id));
 
-    const totaisPorAgf = agfsFiltradas.map((agf: any) => {
-      let totalReceita = 0, totalObjetos = 0, totalDespesaLM = 0;
-      const despesasDetalhadas: Record<string, number> = {};
-      sourceCategorias.forEach((cat: string) => (despesasDetalhadas[cat] = 0));
+    const periodos = anosSelecionadosOrdenados.flatMap((ano) =>
+      mesesOrdenados.map((mes) => ({
+        ano,
+        mes,
+        key: `${ano}-${String(mes).padStart(2, "0")}`,
+        label:
+          anosSelecionadosOrdenados.length > 1
+            ? `${MONTH_LABELS[mes - 1]}/${String(ano).slice(-2)}`
+            : MONTH_LABELS[mes - 1],
+      }))
+    );
 
-      for (const ano of anos) {
-        for (const mes of meses) {
-          const d = sourceDados?.[ano]?.[mes]?.[agf.nome];
-          if (d) {
-            totalReceita  += Number(d.receita ?? 0);
-            totalObjetos  += Number(d.objetos ?? 0);
-            totalDespesaLM += Number(d.despesa_total ?? 0);
-            for (const cat of sourceCategorias) {
-              despesasDetalhadas[cat] += Number(d.despesas?.[cat] ?? 0);
-            }
-          }
+    const periodosConsolidados = periodos.map((periodo) => {
+      const despesas = Object.fromEntries(sourceCategorias.map((categoria) => [categoria, 0])) as Record<string, number>;
+      let receita = 0;
+      let despesa = 0;
+      let objetos = 0;
+      let folhaSemDescricao = 0;
+
+      for (const agf of agfsFiltradas) {
+        const item = sourceDados?.[periodo.ano]?.[periodo.mes]?.[agf.nome];
+        if (!item) continue;
+
+        receita += Number(item.receita || 0);
+        despesa += Number(item.despesa_total || 0);
+        objetos += Number(item.objetos || 0);
+        folhaSemDescricao += Number(item.folha_sem_descricao || 0);
+
+        for (const categoria of sourceCategorias) {
+          despesas[categoria] += Number(item.despesas?.[categoria] || 0);
         }
       }
 
-      // Resultado e margem reais
-      const resultadoReal = totalReceita - totalDespesaLM;
-      const margemReal = totalReceita > 0 ? (resultadoReal / totalReceita) * 100 : 0;
+      return {
+        ...periodo,
+        receita,
+        despesa,
+        resultado: receita - despesa,
+        margem: ratio(receita - despesa, receita),
+        objetos,
+        despesas,
+        folhaSemDescricao,
+      };
+    });
 
-      // ==== AJUSTE: Simulação na mesma lógica do Power BI ====
-      // Somar APENAS as categorias selecionadas (DespesasExcluídas)
-      const despesasExcluidas = categoriasExcluidas.reduce(
-        (acc, cat) => acc + Number(despesasDetalhadas[cat] ?? 0),
+    const totaisPorAgf = agfsFiltradas.map((agf) => {
+      const despesasDetalhadas = Object.fromEntries(sourceCategorias.map((categoria) => [categoria, 0])) as Record<string, number>;
+      const series = periodos.map((periodo) => {
+        const item = sourceDados?.[periodo.ano]?.[periodo.mes]?.[agf.nome];
+        const receita = Number(item?.receita || 0);
+        const despesaTotal = Number(item?.despesa_total || 0);
+        const objetos = Number(item?.objetos || 0);
+        const folhaSemDescricao = Number(item?.folha_sem_descricao || 0);
+        const despesas = Object.fromEntries(sourceCategorias.map((categoria) => [categoria, Number(item?.despesas?.[categoria] || 0)])) as Record<string, number>;
+        const resultado = receita - despesaTotal;
+
+        for (const categoria of sourceCategorias) {
+          despesasDetalhadas[categoria] += despesas[categoria];
+        }
+
+        return {
+          ...periodo,
+          receita,
+          despesaTotal,
+          resultado,
+          margem: ratio(resultado, receita),
+          objetos,
+          despesas,
+          folhaSemDescricao,
+        };
+      });
+
+      const receita = series.reduce((sum, item) => sum + item.receita, 0);
+      const despesaTotal = series.reduce((sum, item) => sum + item.despesaTotal, 0);
+      const objetos = series.reduce((sum, item) => sum + item.objetos, 0);
+      const folhaSemDescricao = series.reduce((sum, item) => sum + item.folhaSemDescricao, 0);
+      const resultado = receita - despesaTotal;
+      const margemLucro = ratio(resultado, receita);
+      const totalSubcontas = sourceCategorias.reduce((sum, categoria) => sum + Number(despesasDetalhadas[categoria] || 0), 0);
+      const ajusteSubcontas = despesaTotal - totalSubcontas;
+      const folhaValor = Number(despesasDetalhadas.folha_pagamento || 0);
+      const aluguelValor = Number(despesasDetalhadas.aluguel || 0);
+      const extrasValor = Number(despesasDetalhadas.extras || 0);
+      const parcelasValor = Number(despesasDetalhadas.parcela_debitos || 0);
+      const latestWithData = [...series].reverse().find((item) => item.receita || item.despesaTotal || item.objetos);
+      const previousWithData = [...series]
+        .reverse()
+        .filter((item) => item.receita || item.despesaTotal || item.objetos)[1];
+
+      const variacaoReceita = latestWithData && previousWithData ? pctChange(latestWithData.receita, previousWithData.receita) : 0;
+      const variacaoDespesa =
+        latestWithData && previousWithData ? pctChange(latestWithData.despesaTotal, previousWithData.despesaTotal) : 0;
+      const variacaoMargemPp =
+        latestWithData && previousWithData ? latestWithData.margem - previousWithData.margem : 0;
+      const doisUltimosNegativos = !!(
+        latestWithData &&
+        previousWithData &&
+        latestWithData.resultado < 0 &&
+        previousWithData.resultado < 0
+      );
+
+      const status =
+        margemLucro >= 40 && ratio(parcelasValor, receita) < 5 && ratio(aluguelValor, receita) < 15
+          ? "Benchmark"
+          : margemLucro < 10 || ratio(aluguelValor, receita) > 20 || doisUltimosNegativos
+            ? "Critico"
+            : "Atencao";
+
+      const scenarioCategories = new Set(categoriasExcluidas);
+      if (scenario.zerarParcelas) scenarioCategories.add("parcela_debitos");
+      if (scenario.zerarExtras) scenarioCategories.add("extras");
+
+      const economiaCategorias = Array.from(scenarioCategories).reduce(
+        (sum, categoria) => sum + Number(despesasDetalhadas[categoria] || 0),
         0
       );
-      // ResultadoSimulado = ResultadoReal + DespesasExcluídas
-      const resultadoSimulado = resultadoReal + despesasExcluidas;
-      const margemSimulada = totalReceita > 0 ? (resultadoSimulado / totalReceita) * 100 : 0;
-      const ganhoMargem = categoriasExcluidas.length === 0 ? 0 : Math.max(0, margemSimulada - margemReal);
-      // =======================================================
+
+      const economiaFolhaMeta =
+        scenario.folhaMeta14 && !scenarioCategories.has("folha_pagamento")
+          ? Math.max(0, folhaValor - receita * 0.14)
+          : 0;
+
+      const economiaAluguel =
+        scenario.aluguel20 && !scenarioCategories.has("aluguel") ? aluguelValor * 0.2 : 0;
+
+      const economiaTotal = economiaCategorias + economiaFolhaMeta + economiaAluguel;
+      const resultadoSimulado = resultado + economiaTotal;
+      const margemSimulada = ratio(resultadoSimulado, receita);
 
       return {
+        id: agf.id,
         nome: agf.nome,
-        receita: totalReceita,
-        despesaTotal: totalDespesaLM,
-        resultado: resultadoReal,
-        margemLucro: margemReal,
-        objetos: totalObjetos,
+        receita,
+        despesaTotal,
+        resultado,
+        margemLucro,
+        objetos,
+        folhaSemDescricao,
         despesasDetalhadas,
-        margemLucroReal: margemReal,
-        ganhoMargem
+        despesasPercentuais: Object.fromEntries(
+          sourceCategorias.map((categoria) => [categoria, ratio(Number(despesasDetalhadas[categoria] || 0), receita)])
+        ) as Record<string, number>,
+        receitaPorPeriodo: series,
+        variacaoReceita,
+        variacaoDespesa,
+        variacaoMargemPp,
+        doisUltimosNegativos,
+        status,
+        ajusteSubcontas,
+        riscoExtraordinario: extrasValor + parcelasValor,
+        despesaReceitaPct: ratio(despesaTotal, receita),
+        folhaReceitaPct: ratio(folhaValor, receita),
+        aluguelReceitaPct: ratio(aluguelValor, receita),
+        extrasReceitaPct: ratio(extrasValor, receita),
+        parcelasReceitaPct: ratio(parcelasValor, receita),
+        margemLucroReal: margemLucro,
+        margemLucroSimulada: margemSimulada,
+        ganhoMargem: categoriasExcluidas.length > 0 || scenario.zerarParcelas || scenario.zerarExtras || scenario.folhaMeta14 || scenario.aluguel20
+          ? Math.max(0, margemSimulada - margemLucro)
+          : 0,
+        impactoFinanceiroSimulado: economiaTotal,
+        resultadoSimulado,
       };
     });
 
     const totaisGerais = {
-      receita:  totaisPorAgf.reduce((a, b) => a + b.receita, 0),
-      despesa:  totaisPorAgf.reduce((a, b) => a + b.despesaTotal, 0),
-      resultado: totaisPorAgf.reduce((a, b) => a + b.resultado, 0),
-      objetos:  totaisPorAgf.reduce((a, b) => a + b.objetos, 0),
+      receita: totaisPorAgf.reduce((sum, item) => sum + item.receita, 0),
+      despesa: totaisPorAgf.reduce((sum, item) => sum + item.despesaTotal, 0),
+      resultado: totaisPorAgf.reduce((sum, item) => sum + item.resultado, 0),
+      objetos: totaisPorAgf.reduce((sum, item) => sum + item.objetos, 0),
+      resultadoSimulado: totaisPorAgf.reduce((sum, item) => sum + item.resultadoSimulado, 0),
+      impactoSimulado: totaisPorAgf.reduce((sum, item) => sum + item.impactoFinanceiroSimulado, 0),
     };
 
-    const evolucaoResultado = mesList.map((mes) => {
-      let resultadoMes = 0;
-      const anosParaEvolucao = anosSelecionados.length > 0 ? anosSelecionados : [anosDisponiveis[anosDisponiveis.length - 1] || new Date().getFullYear()];
-      for (const ano of anosParaEvolucao) {
-        for (const agf of agfsFiltradas) {
-          const d = sourceDados?.[ano]?.[mes]?.[agf.nome];
-          if (d) {
-            resultadoMes += Number(d.receita ?? 0) - Number(d.despesa_total ?? 0);
-          }
+    const evolucaoTemporal = periodosConsolidados.map((periodo) => ({
+      ...periodo,
+      valor:
+        timelineMetric === "receita"
+          ? periodo.receita
+          : timelineMetric === "despesa"
+            ? periodo.despesa
+            : timelineMetric === "margem"
+              ? periodo.margem
+              : periodo.resultado,
+    }));
+
+    const ultimosDoisPeriodos = [...periodosConsolidados].filter((item) => item.receita || item.despesa).slice(-2);
+    const resumoPeriodoAtual = ultimosDoisPeriodos[ultimosDoisPeriodos.length - 1] || null;
+    const resumoPeriodoAnterior = ultimosDoisPeriodos.length > 1 ? ultimosDoisPeriodos[ultimosDoisPeriodos.length - 2] : null;
+
+    const alertas = totaisPorAgf
+      .flatMap((agf) => {
+        const itens: Array<{ titulo: string; detalhe: string; level: "high" | "medium" | "low"; agf: string }> = [];
+
+        if (agf.variacaoReceita <= ALERT_LIMITS.quedaReceitaPct) {
+          itens.push({
+            agf: agf.nome,
+            level: "high",
+            titulo: "Queda abrupta de receita",
+            detalhe: `${agf.nome} caiu ${formatPercent(agf.variacaoReceita)} entre os dois ultimos periodos.`,
+          });
         }
-      }
+        if (agf.margemLucro < ALERT_LIMITS.margemCriticaPct) {
+          itens.push({
+            agf: agf.nome,
+            level: agf.margemLucro < 0 ? "high" : "medium",
+            titulo: "Margem critica",
+            detalhe: `${agf.nome} opera com margem de ${formatPercent(agf.margemLucro)} no filtro atual.`,
+          });
+        }
+        if (agf.doisUltimosNegativos) {
+          itens.push({
+            agf: agf.nome,
+            level: "high",
+            titulo: "Resultado negativo recorrente",
+            detalhe: `${agf.nome} ficou negativa nos dois ultimos periodos com dados.`,
+          });
+        }
+        if (agf.folhaReceitaPct > ALERT_LIMITS.folhaPct) {
+          itens.push({
+            agf: agf.nome,
+            level: "medium",
+            titulo: "Folha acima do limite",
+            detalhe: `${agf.nome} esta com Folha/Receita em ${formatPercent(agf.folhaReceitaPct)}.`,
+          });
+        }
+        if (agf.aluguelReceitaPct > ALERT_LIMITS.aluguelPct) {
+          itens.push({
+            agf: agf.nome,
+            level: agf.aluguelReceitaPct > 35 ? "high" : "medium",
+            titulo: "Aluguel pressiona a operacao",
+            detalhe: `${agf.nome} esta com Aluguel/Receita em ${formatPercent(agf.aluguelReceitaPct)}.`,
+          });
+        }
+        if (agf.despesaReceitaPct > ALERT_LIMITS.despesaPct) {
+          itens.push({
+            agf: agf.nome,
+            level: agf.despesaReceitaPct > 100 ? "high" : "medium",
+            titulo: "Despesa quase consome a receita",
+            detalhe: `${agf.nome} esta com Despesa/Receita em ${formatPercent(agf.despesaReceitaPct)}.`,
+          });
+        }
+        if (agf.extrasReceitaPct > ALERT_LIMITS.extrasPct) {
+          itens.push({
+            agf: agf.nome,
+            level: "medium",
+            titulo: "Extras elevados",
+            detalhe: `${agf.nome} esta com Extras/Receita em ${formatPercent(agf.extrasReceitaPct)}.`,
+          });
+        }
+        if (agf.parcelasReceitaPct > ALERT_LIMITS.parcelasPct) {
+          itens.push({
+            agf: agf.nome,
+            level: "high",
+            titulo: "Parcelas de debito relevantes",
+            detalhe: `${agf.nome} esta com Parcelas/Receita em ${formatPercent(agf.parcelasReceitaPct)}.`,
+          });
+        }
+        if (agf.folhaSemDescricao > 0) {
+          itens.push({
+            agf: agf.nome,
+            level: "medium",
+            titulo: "Folha com SEM DESCRICAO",
+            detalhe: `${agf.nome} tem ${formatCurrency(agf.folhaSemDescricao)} sem descricao na folha.`,
+          });
+        }
+
+        return itens;
+      })
+      .sort((a, b) => {
+        const weight = { high: 0, medium: 1, low: 2 };
+        return weight[a.level] - weight[b.level];
+      });
+
+    const benchmark = {
+      margem: median(totaisPorAgf.map((item) => item.margemLucro)),
+      folha: median(totaisPorAgf.map((item) => item.folhaReceitaPct)),
+      aluguel: median(totaisPorAgf.map((item) => item.aluguelReceitaPct)),
+      despesa: median(totaisPorAgf.map((item) => item.despesaReceitaPct)),
+      parcelas: median(totaisPorAgf.map((item) => item.parcelasReceitaPct)),
+    };
+
+    const benchmarkRows = totaisPorAgf
+      .map((item) => {
+        let gap = 0;
+        let valorAtual = 0;
+        let referencia = 0;
+
+        if (benchmarkMetric === "margem") {
+          valorAtual = item.margemLucro;
+          referencia = benchmark.margem;
+          gap = valorAtual - referencia;
+        } else if (benchmarkMetric === "folha") {
+          valorAtual = item.folhaReceitaPct;
+          referencia = benchmark.folha;
+          gap = referencia - valorAtual;
+        } else if (benchmarkMetric === "aluguel") {
+          valorAtual = item.aluguelReceitaPct;
+          referencia = benchmark.aluguel;
+          gap = referencia - valorAtual;
+        } else if (benchmarkMetric === "despesa") {
+          valorAtual = item.despesaReceitaPct;
+          referencia = benchmark.despesa;
+          gap = referencia - valorAtual;
+        } else {
+          valorAtual = item.parcelasReceitaPct;
+          referencia = benchmark.parcelas;
+          gap = referencia - valorAtual;
+        }
+
+        return {
+          nome: item.nome,
+          gap,
+          valorAtual,
+          referencia,
+          fill: gap >= 0 ? CHART_COLORS.resultado : CHART_COLORS.despesa,
+        };
+      })
+      .sort((a, b) => b.gap - a.gap);
+
+    const rankingConsultivo = {
+      margem: [...totaisPorAgf].sort((a, b) => b.margemLucro - a.margemLucro).slice(0, 5),
+      folha: [...totaisPorAgf].sort((a, b) => a.folhaReceitaPct - b.folhaReceitaPct).slice(0, 5),
+      aluguel: [...totaisPorAgf].sort((a, b) => b.aluguelReceitaPct - a.aluguelReceitaPct).slice(0, 5),
+      risco: [...totaisPorAgf].sort((a, b) => b.riscoExtraordinario - a.riscoExtraordinario).slice(0, 5),
+    };
+
+    const waterfallOptions = totaisPorAgf.map((item) => ({ id: item.id, nome: item.nome }));
+    const waterfallSelected =
+      waterfallMode === "agf"
+        ? totaisPorAgf.find((item) => item.id === (agfsSelecionadas.length === 1 ? agfsSelecionadas[0] : waterfallAgfId)) || totaisPorAgf[0]
+        : null;
+
+    const waterfallBase =
+      waterfallMode === "agf" && waterfallSelected
+        ? {
+            nome: waterfallSelected.nome,
+            receita: waterfallSelected.receita,
+            despesaTotal: waterfallSelected.despesaTotal,
+            resultado: waterfallSelected.resultado,
+            despesasDetalhadas: waterfallSelected.despesasDetalhadas,
+            ajusteSubcontas: waterfallSelected.ajusteSubcontas,
+          }
+        : {
+            nome: "Consolidado",
+            receita: totaisGerais.receita,
+            despesaTotal: totaisGerais.despesa,
+            resultado: totaisGerais.resultado,
+            despesasDetalhadas: sourceCategorias.reduce((acc, categoria) => {
+              acc[categoria] = totaisPorAgf.reduce((sum, item) => sum + Number(item.despesasDetalhadas[categoria] || 0), 0);
+              return acc;
+            }, {} as Record<string, number>),
+            ajusteSubcontas:
+              totaisGerais.despesa -
+              sourceCategorias.reduce(
+                (sum, categoria) =>
+                  sum +
+                  totaisPorAgf.reduce((acc, item) => acc + Number(item.despesasDetalhadas[categoria] || 0), 0),
+                0
+              ),
+          };
+
+    const waterfallOrder = [
+      "folha_pagamento",
+      "aluguel",
+      "comissoes",
+      "impostos",
+      "extras",
+      "parcela_debitos",
+      "veiculos",
+      "telefone",
+      "honorarios",
+      "pitney",
+    ];
+
+    const waterfallSteps: Array<{ name: string; amount: number; fill: string }> = [
+      { name: "Receita", amount: waterfallBase.receita, fill: CHART_COLORS.receita },
+      ...waterfallOrder
+        .map((categoria) => ({
+          name: CATEGORY_LABELS[categoria] || categoria,
+          amount: -Number(waterfallBase.despesasDetalhadas[categoria] || 0),
+          fill:
+            categoria === "parcela_debitos"
+              ? CHART_COLORS.parcela
+              : categoria === "extras"
+                ? CHART_COLORS.extras
+                : CHART_COLORS.despesa,
+        }))
+        .filter((item) => Math.abs(item.amount) > 0),
+    ];
+
+    if (Math.abs(waterfallBase.ajusteSubcontas) > 1) {
+      waterfallSteps.push({
+        name: waterfallBase.ajusteSubcontas > 0 ? "Outras despesas" : "Ajuste favoravel",
+        amount: -waterfallBase.ajusteSubcontas,
+        fill: CHART_COLORS.warning,
+      });
+    }
+
+    const waterfallData = [];
+    let running = 0;
+
+    for (const step of waterfallSteps) {
+      const next = running + step.amount;
+      waterfallData.push({
+        name: step.name,
+        base: Math.min(running, next),
+        value: Math.abs(step.amount),
+        realValue: step.amount,
+        fill: step.fill,
+      });
+      running = next;
+    }
+
+    waterfallData.push({
+      name: "Resultado",
+      base: Math.min(0, waterfallBase.resultado),
+      value: Math.abs(waterfallBase.resultado),
+      realValue: waterfallBase.resultado,
+      fill: waterfallBase.resultado >= 0 ? CHART_COLORS.resultado : CHART_COLORS.despesa,
+    });
+
+    const matrixRows = totaisPorAgf.map((item) => {
+      const riskLevel =
+        item.margemLucro < 0 || item.aluguelReceitaPct > 25 || item.parcelasReceitaPct > 15
+          ? "high"
+          : item.margemLucro < 20 || item.extrasReceitaPct > 10 || item.despesaReceitaPct > 80
+            ? "medium"
+            : "low";
+
       return {
-        mes: new Date(2000, mes - 1).toLocaleString("pt-BR", { month: "short" }).replace('.','').toUpperCase(),
-        resultado: resultadoMes
+        nome: item.nome,
+        receita: item.receita,
+        margem: item.margemLucro,
+        z: Math.max(3000, item.riscoExtraordinario),
+        riscoExtraordinario: item.riscoExtraordinario,
+        fill: RISK_COLORS[riskLevel],
       };
     });
 
-    return { totaisPorAgf, totaisGerais, evolucaoResultado };
-  }, [agfsSelecionadas, mesesSelecionados, anosSelecionados, categoriasExcluidas, sourceAgfs, sourceCategorias, sourceDados, anosDisponiveis]);
+    return {
+      periodosConsolidados,
+      totaisPorAgf,
+      totaisGerais,
+      evolucaoTemporal,
+      resumoPeriodoAtual,
+      resumoPeriodoAnterior,
+      alertas,
+      benchmark,
+      benchmarkRows,
+      rankingConsultivo,
+      waterfallData,
+      waterfallBase,
+      waterfallOptions,
+      matrixRows,
+      agfChartMinWidth: Math.max(680, totaisPorAgf.length * 120),
+    };
+  }, [
+    agfsSelecionadas,
+    mesesSelecionados,
+    anosSelecionados,
+    categoriasExcluidas,
+    sourceAgfs,
+    sourceCategorias,
+    sourceDados,
+    anosDisponiveis,
+    mesesDisponiveis,
+    timelineMetric,
+    benchmarkMetric,
+    scenario,
+    waterfallMode,
+    waterfallAgfId,
+  ]);
+
+  useEffect(() => {
+    if (dadosProcessados.waterfallOptions.length === 0) return;
+    if (agfsSelecionadas.length === 1) {
+      setWaterfallAgfId(agfsSelecionadas[0]);
+      return;
+    }
+    if (!waterfallAgfId) {
+      setWaterfallAgfId(dadosProcessados.waterfallOptions[0].id);
+    }
+  }, [agfsSelecionadas, dadosProcessados.waterfallOptions, waterfallAgfId]);
 
   const handleMultiSelect = (setter: Function, value: any) =>
-    setter((prev: any[]) => prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]);
-  const currencyFormatter = (value: number) => Number(value ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-  const percentFormatter  = (value: number) => `${Number(value ?? 0).toFixed(1)}%`;
-  const numberFormatter   = (value: number) => Number(value ?? 0).toLocaleString("pt-BR");
-  const compactNumberFormatter = (value: number) => Number(value ?? 0).toLocaleString("pt-BR", { notation: "compact" });
-  const moneyRounded = (value: number) => `R$ ${Math.round(Number(value ?? 0)).toLocaleString("pt-BR")}`;
-  const agfChartMinWidth = Math.max(560, dadosProcessados.totaisPorAgf.length * 110);
-  const agfTick = { fill: "#E9F2FF", opacity: 0.7, fontSize: 11 };
+    setter((previous: any[]) => (previous.includes(value) ? previous.filter((item) => item !== value) : [...previous, value]));
 
-  const CORES = { receita: "#4AA8FF", despesa: "#E74C3C", resultado: "#48DB8A", objetos: "#F2C14E", margem: "#A974F8", simulacaoReal: "#A974F8", simulacaoGanho: "#F4D35E" };
+  const toggleScenario = (key: keyof ScenarioState) => {
+    setScenario((previous) => ({ ...previous, [key]: !previous[key] }));
+  };
 
-  if (loading)
-    return <div className="flex items-center justify-center h-screen bg-background-start text-white"><div className="p-6 text-lg">Carregando dados…</div></div>;
-  if (error)
-    return <div className="flex items-center justify-center h-screen bg-background-start text-red-400"><div className="p-6 bg-card rounded-lg">{error}</div></div>;
-  if (!empresaId && !apiData)
-  return <div className="flex items-center justify-center h-screen bg-background-start text-white">
-    <div className="p-6 text-lg">
-      ID não fornecido. Adicione <code>?user_id=...</code> (novo) ou <code>?empresa_id=...</code> (compatibilidade) à URL.
-    </div>
-  </div>;
+  const tickStyle = { fill: "#E9F2FF", opacity: 0.75, fontSize: 11 };
 
+  const timelineFormatter = timelineMetric === "margem" ? formatPercent : formatCurrency;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-background-start text-white">
+        <div className="p-6 text-lg">Carregando dados...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-background-start text-red-400">
+        <div className="p-6 bg-card rounded-lg">{error}</div>
+      </div>
+    );
+  }
+
+  if (!empresaId && !apiData) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-background-start text-white">
+        <div className="p-6 text-lg">
+          ID nao fornecido. Adicione <code>?user_id=...</code> ou <code>?empresa_id=...</code> a URL.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-8 bg-background-start text-text min-h-screen">
       <main className="max-w-7xl mx-auto flex flex-col gap-8">
-        {/* FILTROS */}
         <header className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <MultiSelectFilter name="AGF" options={sourceAgfs} selected={agfsSelecionadas} onSelect={(id) => handleMultiSelect(setAgfsSelecionadas, id)} />
-          <MultiSelectFilter name="Mês" options={mesList.map((m) => ({ id: m, nome: new Date(0, m - 1).toLocaleString("pt-BR", { month: "long" }) }))} selected={mesesSelecionados} onSelect={(id) => handleMultiSelect(setMesesSelecionados, id)} />
-          <MultiSelectFilter name="Ano" options={anosDisponiveis.map((a) => ({ id: a, nome: a.toString() }))} selected={anosSelecionados} onSelect={(id) => handleMultiSelect(setAnosSelecionados, id)} />
+          <MultiSelectFilter
+            name="AGF"
+            options={sourceAgfs}
+            selected={agfsSelecionadas}
+            onSelect={(id) => handleMultiSelect(setAgfsSelecionadas, id)}
+          />
+          <MultiSelectFilter
+            name="Mes"
+            options={ALL_MONTHS.map((mes) => ({
+              id: mes,
+              nome: new Date(2000, mes - 1).toLocaleString("pt-BR", { month: "long" }),
+            }))}
+            selected={mesesSelecionados}
+            onSelect={(id) => handleMultiSelect(setMesesSelecionados, id)}
+          />
+          <MultiSelectFilter
+            name="Ano"
+            options={anosDisponiveis.map((ano) => ({ id: ano, nome: ano.toString() }))}
+            selected={anosSelecionados}
+            onSelect={(id) => handleMultiSelect(setAnosSelecionados, id)}
+          />
         </header>
 
-        {/* KPIs */}
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card title="Resultado" value={currencyFormatter(dadosProcessados.totaisGerais.resultado)} borderColor={CORES.resultado} valueColor="text-success" />
-          <Card title="Receita Total" value={currencyFormatter(dadosProcessados.totaisGerais.receita)} borderColor={CORES.receita} valueColor="text-info" />
-          <Card title="Despesa Total" value={currencyFormatter(dadosProcessados.totaisGerais.despesa)} borderColor={CORES.despesa} valueColor="text-destructive" />
-          <Card title="Objetos Tratados" value={numberFormatter(dadosProcessados.totaisGerais.objetos)} borderColor={CORES.objetos} valueColor="text-warning" />
+          <Card
+            title="Resultado"
+            value={formatCurrency(dadosProcessados.totaisGerais.resultado)}
+            borderColor={CHART_COLORS.resultado}
+            valueColor="text-success"
+          />
+          <Card
+            title="Receita Total"
+            value={formatCurrency(dadosProcessados.totaisGerais.receita)}
+            borderColor={CHART_COLORS.receita}
+            valueColor="text-info"
+          />
+          <Card
+            title="Despesa Total"
+            value={formatCurrency(dadosProcessados.totaisGerais.despesa)}
+            borderColor={CHART_COLORS.despesa}
+            valueColor="text-destructive"
+          />
+          <Card
+            title="Objetos Tratados"
+            value={formatNumber(dadosProcessados.totaisGerais.objetos)}
+            borderColor={CHART_COLORS.objetos}
+            valueColor="text-warning"
+          />
         </section>
 
-        {/* Resultado no tempo */}
+        <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          {dadosProcessados.alertas.length === 0 ? (
+            <div className="bg-card rounded-lg p-4 text-text/70 md:col-span-2 xl:col-span-4">
+              Nenhum alerta critico ou de atencao foi encontrado no filtro atual.
+            </div>
+          ) : (
+            dadosProcessados.alertas.slice(0, 8).map((alerta, index) => (
+              <div key={`${alerta.agf}-${index}`} className="bg-card rounded-lg p-4 border border-white/10">
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <h3 className="font-semibold text-sm">{alerta.titulo}</h3>
+                  <AlertBadge level={alerta.level} />
+                </div>
+                <p className="text-sm text-text/70 mb-2">{alerta.detalhe}</p>
+                <p className="text-xs text-text/50 uppercase tracking-wide">{alerta.agf}</p>
+              </div>
+            ))
+          )}
+        </section>
+
         <section>
-          <ChartContainer title="Resultado ao longo do tempo" className="h-[300px]">
-            <AreaChart data={dadosProcessados.evolucaoResultado} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
+          <ChartContainer
+            title="Resultado ao longo do tempo"
+            className="h-[360px]"
+            actions={<SegmentedControl items={TIMELINE_METRICS} value={timelineMetric} onChange={setTimelineMetric} />}
+          >
+            <AreaChart data={dadosProcessados.evolucaoTemporal} margin={{ top: 10, right: 20, left: 12, bottom: 5 }}>
               <defs>
-                <linearGradient id="colorResultado" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#F2935C" stopOpacity={0.8} />
-                  <stop offset="95%" stopColor="#1F1F3C" stopOpacity={0.1} />
+                <linearGradient id="timelineGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#F2935C" stopOpacity={0.85} />
+                  <stop offset="95%" stopColor="#1F1F3C" stopOpacity={0.08} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(233, 242, 255, 0.1)" />
-              <XAxis dataKey="mes" stroke="#E9F2FF" tick={{ fill: "#E9F2FF", opacity: 0.7, fontSize: 12 }} />
-              <YAxis stroke="#E9F2FF" tickFormatter={compactNumberFormatter} tick={{ fill: "#E9F2FF", opacity: 0.7, fontSize: 12 }} />
-              <Tooltip content={<CustomTooltip formatter={currencyFormatter} />} cursor={{ fill: "rgba(255, 255, 255, 0.1)" }} />
-              <Area type="monotone" dataKey="resultado" name="Resultado" stroke="#F2935C" strokeWidth={2} fill="url(#colorResultado)" />
+              <XAxis dataKey="label" stroke="#E9F2FF" tick={tickStyle} />
+              <YAxis
+                stroke="#E9F2FF"
+                tick={tickStyle}
+                tickFormatter={timelineMetric === "margem" ? (value) => formatPercent(Number(value)) : formatCompact}
+              />
+              <Tooltip content={<CustomTooltip formatter={timelineFormatter} />} />
+              <Area
+                type="monotone"
+                dataKey="valor"
+                name={TIMELINE_METRICS.find((item) => item.key === timelineMetric)?.label || "Resultado"}
+                stroke="#F2935C"
+                strokeWidth={2}
+                fill="url(#timelineGradient)"
+              />
             </AreaChart>
           </ChartContainer>
         </section>
 
-        {/* Comparativos */}
-        <section className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <ChartContainer title="Comparativo de Receita" className="h-[320px]" chartMinWidth={agfChartMinWidth}>
-            <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 20, left: -20, bottom: 5 }}>
+        <section className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+          <div className="bg-card p-4 rounded-lg">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-text">Variacao mes contra mes</h3>
+              {dadosProcessados.resumoPeriodoAtual && dadosProcessados.resumoPeriodoAnterior ? (
+                <span className="text-xs text-text/60">
+                  {dadosProcessados.resumoPeriodoAnterior.label} → {dadosProcessados.resumoPeriodoAtual.label}
+                </span>
+              ) : null}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[720px]">
+                <thead>
+                  <tr className="text-left text-text/70 border-b border-white/10">
+                    <th className="py-2 px-2">AGF</th>
+                    <th className="py-2 px-2 text-right">Var. Receita</th>
+                    <th className="py-2 px-2 text-right">Var. Despesa</th>
+                    <th className="py-2 px-2 text-right">Var. Margem</th>
+                    <th className="py-2 px-2 text-right">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dadosProcessados.totaisPorAgf.map((item) => (
+                    <tr key={item.id} className="border-b border-white/5">
+                      <td className="py-2 px-2">{item.nome}</td>
+                      <td className={`py-2 px-2 text-right ${item.variacaoReceita >= 0 ? "text-success" : "text-destructive"}`}>
+                        {formatPercent(item.variacaoReceita)}
+                      </td>
+                      <td className={`py-2 px-2 text-right ${item.variacaoDespesa <= 0 ? "text-success" : "text-warning"}`}>
+                        {formatPercent(item.variacaoDespesa)}
+                      </td>
+                      <td className={`py-2 px-2 text-right ${item.variacaoMargemPp >= 0 ? "text-success" : "text-destructive"}`}>
+                        {item.variacaoMargemPp >= 0 ? "+" : ""}
+                        {item.variacaoMargemPp.toFixed(1)} pp
+                      </td>
+                      <td className="py-2 px-2 text-right">
+                        <span
+                          className={`inline-flex rounded-full px-2 py-1 text-[11px] font-semibold ${
+                            item.status === "Benchmark"
+                              ? "bg-emerald-500/20 text-emerald-200"
+                              : item.status === "Critico"
+                                ? "bg-red-500/20 text-red-200"
+                                : "bg-amber-500/20 text-amber-200"
+                          }`}
+                        >
+                          {item.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <ChartContainer
+            title="Benchmark vs Grupo"
+            className="h-[360px]"
+            chartMinWidth={dadosProcessados.agfChartMinWidth}
+            actions={<SegmentedControl items={BENCHMARK_METRICS} value={benchmarkMetric} onChange={setBenchmarkMetric} />}
+          >
+            <BarChart data={dadosProcessados.benchmarkRows} layout="vertical" margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(233, 242, 255, 0.1)" />
-              <XAxis dataKey="nome" interval={0} angle={-25} textAnchor="end" height={72} tickMargin={10} tick={agfTick} />
-              <YAxis hide />
-              <Tooltip content={<CustomTooltip formatter={currencyFormatter} />} cursor={{ fill: "rgba(255, 255, 255, 0.1)" }} />
-              <Bar dataKey="receita" fill={CORES.receita} name="Receita">
-                <LabelList dataKey="receita" position="top" formatter={(v: number) => compactNumberFormatter(Number(v ?? 0))} style={{ fill: "#E9F2FF", fontSize: 12 }} />
-              </Bar>
-            </BarChart>
-          </ChartContainer>
-          <ChartContainer title="Comparativo de Despesa" className="h-[320px]" chartMinWidth={agfChartMinWidth}>
-            <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 20, left: -20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(233, 242, 255, 0.1)" />
-              <XAxis dataKey="nome" interval={0} angle={-25} textAnchor="end" height={72} tickMargin={10} tick={agfTick} />
-              <YAxis hide />
-              <Tooltip content={<CustomTooltip formatter={currencyFormatter} />} cursor={{ fill: "rgba(255, 255, 255, 0.1)" }} />
-              <Bar dataKey="despesaTotal" fill={CORES.despesa} name="Despesa">
-                <LabelList dataKey="despesaTotal" position="top" formatter={(v: number) => compactNumberFormatter(Number(v ?? 0))} style={{ fill: "#E9F2FF", fontSize: 12 }} />
-              </Bar>
-            </BarChart>
-          </ChartContainer>
-          <ChartContainer title="Comparativo de Resultado" className="h-[320px]" chartMinWidth={agfChartMinWidth}>
-            <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 20, left: -20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(233, 242, 255, 0.1)" />
-              <XAxis dataKey="nome" interval={0} angle={-25} textAnchor="end" height={72} tickMargin={10} tick={agfTick} />
-              <YAxis hide />
-              <Tooltip content={<CustomTooltip formatter={currencyFormatter} />} cursor={{ fill: "rgba(255, 255, 255, 0.1)" }} />
-              <Bar dataKey="resultado" fill={CORES.resultado} name="Resultado">
-                <LabelList dataKey="resultado" position="top" formatter={(v: number) => compactNumberFormatter(Number(v ?? 0))} style={{ fill: "#E9F2FF", fontSize: 12 }} />
-              </Bar>
-            </BarChart>
-          </ChartContainer>
-          <ChartContainer title="Comparativo de Margem de Lucro (%)" className="h-[320px]" chartMinWidth={agfChartMinWidth}>
-            <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 20, left: -20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(233, 242, 255, 0.1)" />
-              <XAxis dataKey="nome" interval={0} angle={-25} textAnchor="end" height={72} tickMargin={10} tick={agfTick} />
-              <YAxis hide />
-              <Tooltip content={<CustomTooltip formatter={percentFormatter} />} cursor={{ fill: "rgba(255, 255, 255, 0.1)" }} />
-              <Bar dataKey="margemLucro" fill={CORES.margem} name="Margem">
-                <LabelList dataKey="margemLucro" position="top" formatter={(v: number) => `${Number(v ?? 0).toFixed(1)}%`} style={{ fill: "#E9F2FF", fontSize: 12 }} />
+              <XAxis
+                type="number"
+                tick={tickStyle}
+                tickFormatter={(value) => `${Number(value).toFixed(1)} pp`}
+              />
+              <YAxis type="category" dataKey="nome" width={140} tick={tickStyle} />
+              <ReferenceLine x={0} stroke="rgba(255,255,255,0.25)" />
+              <Tooltip
+                content={
+                  <CustomTooltip
+                    formatter={(value: number) => `${Number(value ?? 0).toFixed(1)} pp`}
+                  />
+                }
+              />
+              <Bar dataKey="gap" name="Gap vs mediana">
+                {dadosProcessados.benchmarkRows.map((item) => (
+                  <Cell key={item.nome} fill={item.fill} />
+                ))}
+                <LabelList
+                  dataKey="valorAtual"
+                  position="right"
+                  formatter={(value: number) => formatPercent(Number(value ?? 0))}
+                  style={{ fill: "#E9F2FF", fontSize: 11 }}
+                />
               </Bar>
             </BarChart>
           </ChartContainer>
         </section>
 
-        {/* Folha e Veículos */}
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <ChartContainer title="Folha de Pagamento" className="h-[380px]" chartMinWidth={agfChartMinWidth}>
+          <ChartContainer title="Comparativo de Receita" className="h-[320px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
+            <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 20, left: -20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(233, 242, 255, 0.1)" />
+              <XAxis dataKey="nome" interval={0} angle={-25} textAnchor="end" height={72} tickMargin={10} tick={tickStyle} />
+              <YAxis hide />
+              <Tooltip content={<CustomTooltip formatter={formatCurrency} />} />
+              <Bar dataKey="receita" fill={CHART_COLORS.receita} name="Receita">
+                <LabelList dataKey="receita" position="top" formatter={(value: number) => formatCompact(value)} style={{ fill: "#E9F2FF", fontSize: 12 }} />
+              </Bar>
+            </BarChart>
+          </ChartContainer>
+          <ChartContainer title="Comparativo de Despesa" className="h-[320px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
+            <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 20, left: -20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(233, 242, 255, 0.1)" />
+              <XAxis dataKey="nome" interval={0} angle={-25} textAnchor="end" height={72} tickMargin={10} tick={tickStyle} />
+              <YAxis hide />
+              <Tooltip content={<CustomTooltip formatter={formatCurrency} />} />
+              <Bar dataKey="despesaTotal" fill={CHART_COLORS.despesa} name="Despesa">
+                <LabelList dataKey="despesaTotal" position="top" formatter={(value: number) => formatCompact(value)} style={{ fill: "#E9F2FF", fontSize: 12 }} />
+              </Bar>
+            </BarChart>
+          </ChartContainer>
+          <ChartContainer title="Comparativo de Resultado" className="h-[320px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
+            <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 20, left: -20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(233, 242, 255, 0.1)" />
+              <XAxis dataKey="nome" interval={0} angle={-25} textAnchor="end" height={72} tickMargin={10} tick={tickStyle} />
+              <YAxis hide />
+              <Tooltip content={<CustomTooltip formatter={formatCurrency} />} />
+              <Bar dataKey="resultado" fill={CHART_COLORS.resultado} name="Resultado">
+                <LabelList dataKey="resultado" position="top" formatter={(value: number) => formatCompact(value)} style={{ fill: "#E9F2FF", fontSize: 12 }} />
+              </Bar>
+            </BarChart>
+          </ChartContainer>
+          <ChartContainer title="Comparativo de Margem de Lucro (%)" className="h-[320px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
+            <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 20, left: -20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(233, 242, 255, 0.1)" />
+              <XAxis dataKey="nome" interval={0} angle={-25} textAnchor="end" height={72} tickMargin={10} tick={tickStyle} />
+              <YAxis hide />
+              <Tooltip content={<CustomTooltip formatter={formatPercent} />} />
+              <Bar dataKey="margemLucro" fill={CHART_COLORS.margem} name="Margem">
+                <LabelList dataKey="margemLucro" position="top" formatter={(value: number) => formatPercent(value)} style={{ fill: "#E9F2FF", fontSize: 12 }} />
+              </Bar>
+            </BarChart>
+          </ChartContainer>
+        </section>
+
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <ChartContainer title="Folha de Pagamento" className="h-[380px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
             <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 20, left: -10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(233, 242, 255, 0.1)" />
-              <XAxis dataKey="nome" interval={0} angle={-25} textAnchor="end" height={72} tickMargin={10} tick={agfTick} />
-              <YAxis tickFormatter={compactNumberFormatter} tick={{ fill: "#E9F2FF", opacity: 0.7, fontSize: 12 }} />
-              <Tooltip content={<CustomTooltip formatter={currencyFormatter} />} cursor={{ fill: "rgba(255, 255, 255, 0.1)" }} />
-              <Bar dataKey="despesasDetalhadas.folha_pagamento" fill="#4472CA" name="Folha de Pagamento">
-                <LabelList dataKey="despesasDetalhadas.folha_pagamento" position="top" formatter={(v: number) => compactNumberFormatter(Number(v ?? 0))} style={{ fill: "#E9F2FF", fontSize: 12 }} />
+              <XAxis dataKey="nome" interval={0} angle={-25} textAnchor="end" height={72} tickMargin={10} tick={tickStyle} />
+              <YAxis tickFormatter={formatCompact} tick={tickStyle} />
+              <Tooltip content={<CustomTooltip formatter={formatCurrency} />} />
+              <Bar dataKey="despesasDetalhadas.folha_pagamento" fill={CHART_COLORS.folha} name="Folha de Pagamento">
+                <LabelList
+                  dataKey="despesasDetalhadas.folha_pagamento"
+                  position="top"
+                  formatter={(value: number) => formatCompact(value)}
+                  style={{ fill: "#E9F2FF", fontSize: 12 }}
+                />
               </Bar>
             </BarChart>
           </ChartContainer>
-          <ChartContainer title="Total Gasto em Veículos por AGF" className="h-[350px]">
-            <PieChart>
-              <Tooltip formatter={currencyFormatter} />
-              <Legend wrapperStyle={{ fontSize: "12px", opacity: 0.8 }} />
-              <Pie
-                data={dadosProcessados.totaisPorAgf}
-                dataKey="despesasDetalhadas.veiculos"
-                nameKey="nome"
-                cx="50%" cy="50%" outerRadius={100}
-                labelLine={false}
-                label={({ cx, cy, midAngle, innerRadius, outerRadius, payload }) => {
-                  const radius = innerRadius + (outerRadius - innerRadius) * 1.2;
-                  const x = cx + radius * Math.cos(-midAngle * (Math.PI / 180));
-                  const y = cy + radius * Math.sin(-midAngle * (Math.PI / 180));
-                  const value = Number((payload as any)?.despesasDetalhadas?.veiculos ?? 0);
-                  return (<text x={x} y={y} fill="white" textAnchor={x > cx ? "start" : "end"} dominantBaseline="central" fontSize={12}>
-                    {compactNumberFormatter(value)}
-                  </text>);
+
+          <ChartContainer title="Matriz de Risco" className="h-[380px]">
+            <ScatterChart margin={{ top: 10, right: 24, left: 8, bottom: 8 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(233, 242, 255, 0.1)" />
+              <XAxis type="number" dataKey="receita" tickFormatter={formatCompact} tick={tickStyle} name="Receita" />
+              <YAxis type="number" dataKey="margem" tickFormatter={formatPercent} tick={tickStyle} name="Margem" />
+              <ZAxis type="number" dataKey="z" range={[80, 550]} />
+              <ReferenceLine y={10} stroke="rgba(255,255,255,0.2)" />
+              <Tooltip
+                cursor={{ strokeDasharray: "4 4" }}
+                content={({ active, payload }: any) => {
+                  if (!active || !payload?.length) return null;
+                  const item = payload[0].payload;
+                  return (
+                    <div className="bg-background-end p-3 border border-primary/50 rounded-md text-sm shadow-lg">
+                      <p className="font-bold mb-1">{item.nome}</p>
+                      <p>Receita: {formatCurrency(item.receita)}</p>
+                      <p>Margem: {formatPercent(item.margem)}</p>
+                      <p>Risco extraordinario: {formatCurrency(item.riscoExtraordinario)}</p>
+                    </div>
+                  );
                 }}
-              >
-                {dadosProcessados.totaisPorAgf.map((_, index) => (
-                  <Cell key={`cell-${index}`} fill={["#F2935C", "#BF6550", "#4472CA", "#48DB8A"][index % 4]} />
+              />
+              <Scatter data={dadosProcessados.matrixRows} name="AGFs">
+                {dadosProcessados.matrixRows.map((item) => (
+                  <Cell key={item.nome} fill={item.fill} />
                 ))}
-              </Pie>
-            </PieChart>
+              </Scatter>
+            </ScatterChart>
           </ChartContainer>
         </section>
 
-        {/* >>> TABELAS – ANTES DA SIMULAÇÃO <<< */}
+        <section className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+          <ChartContainer
+            title={`Waterfall de Resultado - ${dadosProcessados.waterfallBase.nome}`}
+            className="h-[420px]"
+            chartMinWidth={Math.max(760, dadosProcessados.waterfallData.length * 96)}
+            actions={
+              <div className="flex flex-wrap gap-2 items-center">
+                <SegmentedControl
+                  items={[
+                    { key: "consolidado", label: "Consolidado" },
+                    { key: "agf", label: "Por AGF" },
+                  ]}
+                  value={waterfallMode}
+                  onChange={(value) => setWaterfallMode(value)}
+                />
+                {waterfallMode === "agf" ? (
+                  <select
+                    value={agfsSelecionadas.length === 1 ? agfsSelecionadas[0] : waterfallAgfId}
+                    onChange={(event) => setWaterfallAgfId(event.target.value)}
+                    className="bg-background-end border border-primary/50 rounded-md px-3 py-1 text-sm"
+                  >
+                    {dadosProcessados.waterfallOptions.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.nome}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+              </div>
+            }
+          >
+            <BarChart data={dadosProcessados.waterfallData} margin={{ top: 20, right: 20, left: 0, bottom: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(233, 242, 255, 0.1)" />
+              <XAxis dataKey="name" interval={0} angle={-25} textAnchor="end" height={86} tick={tickStyle} />
+              <YAxis tickFormatter={formatCompact} tick={tickStyle} />
+              <Tooltip
+                content={<CustomTooltip formatter={formatCurrency} />}
+                formatter={(value: number, _name: string, props: any) => [
+                  formatCurrency(Number(props.payload.realValue || 0)),
+                  props.payload.name,
+                ]}
+              />
+              <Bar dataKey="base" stackId="waterfall" fill="transparent" />
+              <Bar dataKey="value" stackId="waterfall" name="Impacto">
+                {dadosProcessados.waterfallData.map((item) => (
+                  <Cell key={item.name} fill={item.fill} />
+                ))}
+                <LabelList
+                  dataKey="realValue"
+                  position="top"
+                  formatter={(value: number) => (Math.abs(value) > 0 ? formatCompact(value) : "")}
+                  style={{ fill: "#E9F2FF", fontSize: 11 }}
+                />
+              </Bar>
+            </BarChart>
+          </ChartContainer>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-card rounded-lg p-4">
+              <h3 className="font-bold mb-4">Ranking de Margem</h3>
+              <div className="space-y-3">
+                {dadosProcessados.rankingConsultivo.margem.map((item, index) => (
+                  <div key={item.id} className="flex items-center justify-between text-sm">
+                    <span>
+                      {index + 1}. {item.nome}
+                    </span>
+                    <span className="text-success font-semibold">{formatPercent(item.margemLucro)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="bg-card rounded-lg p-4">
+              <h3 className="font-bold mb-4">Ranking de Folha Eficiente</h3>
+              <div className="space-y-3">
+                {dadosProcessados.rankingConsultivo.folha.map((item, index) => (
+                  <div key={item.id} className="flex items-center justify-between text-sm">
+                    <span>
+                      {index + 1}. {item.nome}
+                    </span>
+                    <span className="text-info font-semibold">{formatPercent(item.folhaReceitaPct)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="bg-card rounded-lg p-4">
+              <h3 className="font-bold mb-4">Ranking de Aluguel Critico</h3>
+              <div className="space-y-3">
+                {dadosProcessados.rankingConsultivo.aluguel.map((item, index) => (
+                  <div key={item.id} className="flex items-center justify-between text-sm">
+                    <span>
+                      {index + 1}. {item.nome}
+                    </span>
+                    <span className="text-warning font-semibold">{formatPercent(item.aluguelReceitaPct)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="bg-card rounded-lg p-4">
+              <h3 className="font-bold mb-4">Ranking de Passivo Oculto</h3>
+              <div className="space-y-3">
+                {dadosProcessados.rankingConsultivo.risco.map((item, index) => (
+                  <div key={item.id} className="flex items-center justify-between text-sm">
+                    <span>
+                      {index + 1}. {item.nome}
+                    </span>
+                    <span className="text-destructive font-semibold">{formatCurrency(item.riscoExtraordinario)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Objetos tratados (1/3) */}
           <div className="bg-card p-4 rounded-lg lg:col-span-1">
             <h3 className="font-bold mb-4 text-text">Objetos tratados</h3>
             <div className="overflow-x-auto">
@@ -434,12 +1406,16 @@ const res = await fetch(`/api/dash-data?${queryParam}=${encodeURIComponent(empre
                 </thead>
                 <tbody>
                   {dadosProcessados.totaisPorAgf.length === 0 ? (
-                    <tr><td className="py-3 px-2" colSpan={2}>Sem dados.</td></tr>
+                    <tr>
+                      <td className="py-3 px-2" colSpan={2}>
+                        Sem dados.
+                      </td>
+                    </tr>
                   ) : (
-                    dadosProcessados.totaisPorAgf.map((r) => (
-                      <tr key={r.nome} className="border-b border-white/5">
-                        <td className="py-2 px-2">{r.nome}</td>
-                        <td className="py-2 px-2 text-right">{numberFormatter(r.objetos)}</td>
+                    dadosProcessados.totaisPorAgf.map((item) => (
+                      <tr key={item.id} className="border-b border-white/5">
+                        <td className="py-2 px-2">{item.nome}</td>
+                        <td className="py-2 px-2 text-right">{formatNumber(item.objetos)}</td>
                       </tr>
                     ))
                   )}
@@ -448,89 +1424,135 @@ const res = await fetch(`/api/dash-data?${queryParam}=${encodeURIComponent(empre
             </div>
           </div>
 
-          {/* Despesas por categoria (2/3) */}
           <div className="bg-card p-4 rounded-lg lg:col-span-2">
-            <h3 className="font-bold mb-4 text-text">Despesas por categoria</h3>
-
-            {/* Ajuste 1: container com scroll horizontal */}
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-text">Despesas por categoria</h3>
+              <span className="text-xs text-text/60">Heatmap por peso da despesa sobre a receita</span>
+            </div>
             <div className="overflow-x-auto">
-              {/* Ajuste 2: min-width alto + nowrap para não “espremer” os valores */}
-              <table className="min-w-[1200px] w-full text-sm">
+              <table className="min-w-[1380px] w-full text-sm">
                 <thead>
                   <tr className="text-left text-text/70 border-b border-white/10">
                     <th className="py-2 px-2 whitespace-nowrap">AGF</th>
-                    {sourceCategorias.map((c: string) => (
-                      <th key={c} className="py-2 px-2 text-right capitalize whitespace-nowrap">
-                        {c.replace(/_/g," ")}
+                    {sourceCategorias.map((categoria) => (
+                      <th key={categoria} className="py-2 px-2 text-center whitespace-nowrap">
+                        {CATEGORY_LABELS[categoria] || categoria}
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {dadosProcessados.totaisPorAgf.length === 0 ? (
-                    <tr><td className="py-3 px-2" colSpan={1 + sourceCategorias.length}>Sem dados.</td></tr>
-                  ) : (
-                    dadosProcessados.totaisPorAgf.map((r) => (
-                      <tr key={r.nome} className="border-b border-white/5">
-                        <td className="py-2 px-2 whitespace-nowrap">{r.nome}</td>
-                        {sourceCategorias.map((c: string) => (
-                          <td key={c} className="py-2 px-2 text-right whitespace-nowrap">
-                            <span className="text-destructive font-semibold">
-                              {moneyRounded(r.despesasDetalhadas[c] ?? 0)}
-                            </span>
+                  {dadosProcessados.totaisPorAgf.map((item) => (
+                    <tr key={item.id} className="border-b border-white/5">
+                      <td className="py-2 px-2 whitespace-nowrap">{item.nome}</td>
+                      {sourceCategorias.map((categoria) => {
+                        const percentual = item.despesasPercentuais[categoria] || 0;
+                        const intensidade = Math.min(percentual / 30, 1);
+
+                        return (
+                          <td
+                            key={`${item.id}-${categoria}`}
+                            className="py-2 px-2 text-center whitespace-nowrap"
+                            style={{
+                              backgroundColor: `rgba(255, 107, 87, ${0.08 + intensidade * 0.32})`,
+                            }}
+                          >
+                            <div className="font-semibold text-text">{formatCompact(item.despesasDetalhadas[categoria] || 0)}</div>
+                            <div className="text-[11px] text-text/70">{formatPercent(percentual)}</div>
                           </td>
-                        ))}
-                      </tr>
-                    ))
-                  )}
+                        );
+                      })}
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
           </div>
         </section>
 
-        {/* ===================== SIMULAÇÃO (ÚLTIMA) ===================== */}
         <section className="bg-card p-4 rounded-lg">
-          <h3 className="font-bold mb-4 text-text">Simulação de Margem de Lucro</h3>
-          <div className="mb-4">
-            <p className="text-sm text-text/80 mb-2">
-              Selecione despesas para <strong>excluir</strong> do cálculo:
-            </p>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between mb-4">
+            <div>
+              <h3 className="font-bold text-text">Simulacao de Margem de Lucro</h3>
+              <p className="text-sm text-text/70 mt-1">Combine exclusoes por categoria com cenarios consultivos.</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-[280px]">
+              <Card
+                title="Resultado Simulado"
+                value={formatCurrency(dadosProcessados.totaisGerais.resultadoSimulado)}
+                borderColor={CHART_COLORS.margem}
+                valueColor="text-text"
+              />
+              <Card
+                title="Impacto Potencial"
+                value={formatCurrency(dadosProcessados.totaisGerais.impactoSimulado)}
+                borderColor={CHART_COLORS.warning}
+                valueColor="text-warning"
+              />
+            </div>
+          </div>
+
+          <div className="mb-5">
+            <p className="text-sm text-text/80 mb-2">Selecione despesas para excluir do calculo:</p>
             <div className="flex flex-wrap gap-2">
-              {sourceCategorias.map((cat: string) => (
+              {sourceCategorias.map((categoria) => (
                 <button
-                  key={cat}
-                  onClick={() => handleMultiSelect(setCategoriasExcluidas, cat)}
-                  className={`px-3 py-1 text-xs rounded-full transition-colors capitalize ${
-                    categoriasExcluidas.includes(cat) ? "bg-primary text-white" : "bg-gray-600/50 text-text/80"
+                  key={categoria}
+                  onClick={() => handleMultiSelect(setCategoriasExcluidas, categoria)}
+                  className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                    categoriasExcluidas.includes(categoria)
+                      ? "bg-primary text-white"
+                      : "bg-white/10 text-text/80 hover:bg-white/20"
                   }`}
                 >
-                  {cat.replace(/_/g, " ")}
+                  {CATEGORY_LABELS[categoria] || categoria}
                 </button>
               ))}
             </div>
           </div>
 
-          <ChartContainer title="" className="h-[420px]" chartMinWidth={Math.max(640, dadosProcessados.totaisPorAgf.length * 80)}>
+          <div className="mb-5">
+            <p className="text-sm text-text/80 mb-2">Cenarios consultivos rapidos:</p>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: "zerarParcelas", label: "Zerar Parcelas" },
+                { key: "zerarExtras", label: "Zerar Extras" },
+                { key: "folhaMeta14", label: "Folha em 14%" },
+                { key: "aluguel20", label: "Reduzir Aluguel 20%" },
+              ].map((scenarioButton) => (
+                <button
+                  key={scenarioButton.key}
+                  onClick={() => toggleScenario(scenarioButton.key as keyof ScenarioState)}
+                  className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                    scenario[scenarioButton.key as keyof ScenarioState]
+                      ? "bg-amber-500 text-background-start"
+                      : "bg-white/10 text-text/80 hover:bg-white/20"
+                  }`}
+                >
+                  {scenarioButton.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <ChartContainer title="" className="h-[440px]" chartMinWidth={Math.max(720, dadosProcessados.totaisPorAgf.length * 90)}>
             <BarChart data={dadosProcessados.totaisPorAgf} layout="vertical" margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(233, 242, 255, 0.1)" />
-              <XAxis type="number" domain={[0, 100]} tickFormatter={(v: number) => `${Number(v ?? 0).toFixed(1)}%`} tick={{ fill: "#E9F2FF", opacity: 0.7, fontSize: 12 }} />
-              <YAxis type="category" dataKey="nome" stroke="#E9F2FF" tick={{ fill: "#E9F2FF", opacity: 0.7, fontSize: 12 }} width={130} />
-              <Tooltip content={<CustomTooltip formatter={(v: number) => `${Number(v ?? 0).toFixed(1)}%`} />} cursor={{ fill: "rgba(255, 255, 255, 0.1)" }} />
-              <Legend wrapperStyle={{ fontSize: "12px", opacity: 0.8 }} />
-              <Bar dataKey="margemLucroReal" stackId="a" fill="#A974F8" name="Margem Real">
-                <LabelList dataKey="margemLucroReal" position="center" formatter={(v: number) => `${Number(v ?? 0).toFixed(1)}%`} style={{ fill: "#E9F2FF", fontSize: 12 }} />
+              <XAxis type="number" domain={[-100, 100]} tickFormatter={formatPercent} tick={tickStyle} />
+              <YAxis type="category" dataKey="nome" tick={tickStyle} width={150} />
+              <Tooltip content={<CustomTooltip formatter={formatPercent} />} />
+              <Legend wrapperStyle={{ fontSize: "12px", opacity: 0.85 }} />
+              <Bar dataKey="margemLucroReal" stackId="a" fill={CHART_COLORS.margem} name="Margem Real">
+                <LabelList dataKey="margemLucroReal" position="center" formatter={(value: number) => formatPercent(value)} style={{ fill: "#E9F2FF", fontSize: 11 }} />
               </Bar>
-              {categoriasExcluidas.length > 0 && (
-                <Bar dataKey="ganhoMargem" stackId="a" fill="#F4D35E" name="Ganho de Margem">
-                  <LabelList
-                    dataKey="ganhoMargem"
-                    position="center"
-                    formatter={(v: number) => (v > 0 ? `+${Number(v ?? 0).toFixed(1)}%` : "")}
-                    style={{ fill: "#010326", fontSize: 12, fontWeight: "bold" }}
-                  />
-                </Bar>
-              )}
+              <Bar dataKey="ganhoMargem" stackId="a" fill={CHART_COLORS.warning} name="Ganho de Margem">
+                <LabelList
+                  dataKey="ganhoMargem"
+                  position="center"
+                  formatter={(value: number) => (value > 0 ? `+${Number(value).toFixed(1)}%` : "")}
+                  style={{ fill: "#010326", fontSize: 11, fontWeight: "bold" }}
+                />
+              </Bar>
             </BarChart>
           </ChartContainer>
         </section>
