@@ -9,6 +9,7 @@ const CATEGORIAS_DESPESA = [
   "extras",
   "honorarios",
   "impostos",
+  "parcela_debitos",
   "pitney",
   "telefone",
   "veiculos",
@@ -196,6 +197,10 @@ function normalizeCategoriaFromMeta(nomeCategoria: string, descricao: string, ca
     honorarios: "honorarios",
     imposto: "impostos",
     impostos: "impostos",
+    "parcela debitos": "parcela_debitos",
+    "parcela debito": "parcela_debitos",
+    "parcela de debitos": "parcela_debitos",
+    "parcela de debito": "parcela_debitos",
     pitney: "pitney",
     telefone: "telefone",
     telefonia: "telefone",
@@ -210,6 +215,7 @@ function normalizeCategoriaFromMeta(nomeCategoria: string, descricao: string, ca
   if (categoriaNormalizada.includes("alug")) return "aluguel";
   if (categoriaNormalizada.includes("comis")) return "comissoes";
   if (categoriaNormalizada.includes("honor")) return "honorarios";
+  if (categoriaNormalizada.includes("parcela") && categoriaNormalizada.includes("debit")) return "parcela_debitos";
   if (categoriaNormalizada.includes("pitney")) return "pitney";
   if (categoriaNormalizada.includes("telef")) return "telefone";
   if (categoriaNormalizada.includes("veic")) return "veiculos";
@@ -346,15 +352,20 @@ export async function GET(req: Request) {
       );
     }
 
-    const agfs = agfList
-      .map((agf) => {
-        const nomeRaw = (agf as any)["Nome da AGF"] || (agf as any).nome || (agf as any).name || agf._id;
-        return { id: agf._id, nome: normAgfName(nomeRaw) };
-      })
-      .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    const agfIdToNome = new Map<string, string>();
+    const agfNameToOption = new Map<string, { id: string; nome: string }>();
 
-    const agfIdToNome = new Map<string, string>(agfs.map((agf) => [agf.id, agf.nome]));
-    const agfIds = agfs.map((agf) => agf.id);
+    for (const agf of agfList) {
+      const nomeRaw = (agf as any)["Nome da AGF"] || (agf as any).nome || (agf as any).name || agf._id;
+      const nome = normAgfName(nomeRaw);
+      agfIdToNome.set(agf._id, nome);
+      if (!agfNameToOption.has(nome)) {
+        agfNameToOption.set(nome, { id: agf._id, nome });
+      }
+    }
+
+    const agfs = Array.from(agfNameToOption.values()).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    const agfIds = Array.from(new Set(agfList.map((agf) => agf._id)));
 
     if (agfIds.length === 0) {
       return NextResponse.json({
@@ -495,6 +506,18 @@ export async function GET(req: Request) {
       1000
     );
 
+    const folhaList = await bubbleGetAll<{
+      _id: string;
+      AGF?: BubbleRef;
+      ["LançamentoMensal"]?: BubbleRef | { _id?: string; Ano?: unknown; ["Mês"]?: unknown; AGF?: BubbleRef };
+      ["Lançamento Mensal"]?: BubbleRef | { _id?: string; Ano?: unknown; ["Mês"]?: unknown; AGF?: BubbleRef };
+      ["Funcionário"]?: unknown;
+      Funcionario?: unknown;
+      ["Salário Líquido"]?: number | string;
+      ["Salário Bruto"]?: number | string;
+      ["Salário Base"]?: number | string;
+    }>("Folha Pgto", [{ key: "AGF", constraint_type: "in", value: agfIds }], 1000).catch(() => []);
+
     const dados: Record<
       number,
       Record<
@@ -507,6 +530,7 @@ export async function GET(req: Request) {
             despesa_total: number;
             despesas: Record<string, number>;
             despesa_subcontas_total?: number;
+            folha_sem_descricao?: number;
           }
         >
       >
@@ -522,6 +546,7 @@ export async function GET(req: Request) {
           objetos: 0,
           despesa_total: 0,
           despesas: Object.fromEntries(CATEGORIAS_DESPESA.map((categoria) => [categoria, 0])),
+          folha_sem_descricao: 0,
         };
       }
       return dados[ano][mes][key];
@@ -630,6 +655,55 @@ export async function GET(req: Request) {
       entry.despesa_subcontas_total = (entry.despesa_subcontas_total || 0) + valor;
     }
 
+    for (const folha of folhaList) {
+      const lmField = (folha as any)["LançamentoMensal"] ?? (folha as any)["Lançamento Mensal"];
+      let ano = 0;
+      let mes = 0;
+      let agfNome = "AGF";
+
+      if (typeof lmField === "string") {
+        const meta = lmIndex.get(lmField);
+        if (meta) {
+          ano = meta.ano;
+          mes = meta.mes;
+          agfNome = meta.agfNome;
+        }
+      } else if (typeof lmField === "object" && lmField) {
+        ano = parseAno((lmField as any).Ano);
+        mes = parseMes((lmField as any)["Mês"]);
+        const agfId = refToId((lmField as any).AGF);
+        agfNome = normAgfName(agfIdToNome.get(agfId || "") || agfNome);
+      }
+
+      if ((folha as any).AGF) {
+        const agfId = refToId((folha as any).AGF);
+        agfNome = normAgfName(agfIdToNome.get(agfId || "") || agfNome);
+      }
+
+      if (!ano || !mes) continue;
+
+      const funcionarioRaw = (folha as any)["Funcionário"] ?? (folha as any).Funcionario ?? "";
+      const funcionarioNome = String(
+        typeof funcionarioRaw === "string"
+          ? funcionarioRaw
+          : (funcionarioRaw as any)?.Nome || (funcionarioRaw as any)?.name || ""
+      )
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+        .toUpperCase();
+
+      if (funcionarioNome !== "SEM DESCRICAO") continue;
+
+      const entry = ensure(ano, mes, agfNome);
+      const valor =
+        parseValorBR((folha as any)["Salário Líquido"]) ||
+        parseValorBR((folha as any)["Salário Bruto"]) ||
+        parseValorBR((folha as any)["Salário Base"]);
+
+      entry.folha_sem_descricao = Number(entry.folha_sem_descricao || 0) + Number(valor || 0);
+    }
+
     for (const anoStr of Object.keys(dados)) {
       const ano = Number(anoStr);
       for (const mesStr of Object.keys(dados[ano])) {
@@ -643,6 +717,7 @@ export async function GET(req: Request) {
             item.despesas[categoria] = Number(item.despesas[categoria] || 0);
           }
           item.despesa_subcontas_total = Number(item.despesa_subcontas_total || 0);
+          item.folha_sem_descricao = Number(item.folha_sem_descricao || 0);
         }
       }
     }
