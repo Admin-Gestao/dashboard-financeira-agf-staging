@@ -9,18 +9,18 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        primary: '#F2935C',
-        secondary: '#BF6550',
+        primary: '#D6A35D',
+        secondary: '#8C6A3A',
         background: {
-          start: '#010326',
-          end: '#010440',
+          start: '#050816',
+          end: '#0B1026',
         },
-        text: '#E9F2FF',
-        card: '#1F1F3C',
-        success: '#48DB8A',
-        info: '#4AA8FF',
-        destructive: '#E74C3C',
-        warning: '#F2C14E',
+        text: '#F3F6FC',
+        card: '#11182E',
+        success: '#43D18E',
+        info: '#66AEFF',
+        destructive: '#FF6F61',
+        warning: '#E4BE63',
       },
       fontFamily: {
         poppins: ["Poppins", "sans-serif"],
