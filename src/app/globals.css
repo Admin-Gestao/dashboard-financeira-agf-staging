@@ -7,9 +7,9 @@
 @layer base {
   :root {
     --bg-base: #010326;
-    --bg-surface: #020540;
-    --bg-elevated: #030960;
-    --bg-input: #02062e;
+    --bg-surface: #1f1f3c;
+    --bg-elevated: #141a33;
+    --bg-input: #0d1230;
     --bg-overlay: rgba(2, 6, 84, 0.6);
 
     --border-subtle: rgba(180, 160, 100, 0.12);
@@ -48,7 +48,7 @@
     background:
       radial-gradient(circle at top left, rgba(166, 124, 58, 0.08), transparent 20%),
       radial-gradient(circle at top right, rgba(94, 127, 196, 0.08), transparent 24%),
-      linear-gradient(180deg, #010326 0%, #020540 56%, #030960 100%);
+      linear-gradient(180deg, #010326 0%, #071022 54%, #0b1026 100%);
     letter-spacing: -0.01em;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
@@ -101,7 +101,12 @@
   .dashboard-surface-hover:hover {
     border-color: var(--border-medium);
     box-shadow: var(--shadow-md);
-    transform: translateY(-1px);
+    transform: translateY(-2px);
+  }
+
+  .dashboard-surface-hover:hover .chart-title,
+  .dashboard-surface-hover:hover .panel-title {
+    color: var(--accent-text);
   }
 
   .chart-title,
