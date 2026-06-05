@@ -24,12 +24,7 @@ import { ChevronDown } from "lucide-react";
 type TimelineMetric = "resultado" | "receita" | "despesa" | "margem";
 type BenchmarkMetric = "margem" | "folha" | "aluguel" | "despesa" | "parcelas";
 
-type ScenarioState = {
-  zerarParcelas: boolean;
-  zerarExtras: boolean;
-  folhaMeta14: boolean;
-  aluguel20: boolean;
-};
+type SimulationTargets = Partial<Record<string, string>>;
 
 const ALL_MONTHS = Array.from({ length: 12 }, (_, index) => index + 1);
 const MONTH_LABELS = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
@@ -89,12 +84,7 @@ const BENCHMARK_METRICS: Array<{ key: BenchmarkMetric; label: string }> = [
   { key: "parcelas", label: "Parcelas/Rec" },
 ];
 
-const DEFAULT_SCENARIO: ScenarioState = {
-  zerarParcelas: false,
-  zerarExtras: false,
-  folhaMeta14: false,
-  aluguel20: false,
-};
+const DEFAULT_TARGETS: SimulationTargets = {};
 
 type ApiMonthData = {
   receita?: number;
@@ -393,7 +383,7 @@ export default function DashboardPage() {
   const [categoriasExcluidas, setCategoriasExcluidas] = useState<string[]>([]);
   const [timelineMetric, setTimelineMetric] = useState<TimelineMetric>("resultado");
   const [benchmarkMetric, setBenchmarkMetric] = useState<BenchmarkMetric>("margem");
-  const [scenario, setScenario] = useState<ScenarioState>(DEFAULT_SCENARIO);
+  const [simulationTargets, setSimulationTargets] = useState<SimulationTargets>(DEFAULT_TARGETS);
   const [waterfallMode, setWaterfallMode] = useState<"consolidado" | "agf">("consolidado");
   const [waterfallAgfId, setWaterfallAgfId] = useState<string>("");
 
@@ -577,24 +567,25 @@ export default function DashboardPage() {
             ? "Critico"
             : "Atencao";
 
-      const scenarioCategories = new Set(categoriasExcluidas);
-      if (scenario.zerarParcelas) scenarioCategories.add("parcela_debitos");
-      if (scenario.zerarExtras) scenarioCategories.add("extras");
+      const categoriasExcluidasSet = new Set(categoriasExcluidas);
 
-      const economiaCategorias = Array.from(scenarioCategories).reduce(
+      const economiaCategorias = Array.from(categoriasExcluidasSet).reduce(
         (sum, categoria) => sum + Number(despesasDetalhadas[categoria] || 0),
         0
       );
 
-      const economiaFolhaMeta =
-        scenario.folhaMeta14 && !scenarioCategories.has("folha_pagamento")
-          ? Math.max(0, folhaValor - receita * 0.14)
-          : 0;
+      const economiaPorMetas = Object.entries(simulationTargets).reduce((sum, [categoria, targetValue]) => {
+        if (categoriasExcluidasSet.has(categoria)) return sum;
 
-      const economiaAluguel =
-        scenario.aluguel20 && !scenarioCategories.has("aluguel") ? aluguelValor * 0.2 : 0;
+        const targetPercent = safeNumber(String(targetValue).replace(",", "."));
+        if (!Number.isFinite(targetPercent) || targetPercent < 0) return sum;
 
-      const economiaTotal = economiaCategorias + economiaFolhaMeta + economiaAluguel;
+        const categoriaAtual = safeNumber(despesasDetalhadas[categoria] || 0);
+        const metaFinanceira = receita * (targetPercent / 100);
+        return sum + Math.max(0, categoriaAtual - metaFinanceira);
+      }, 0);
+
+      const economiaTotal = economiaCategorias + economiaPorMetas;
       const resultadoSimulado = resultado + economiaTotal;
       const margemSimulada = ratio(resultadoSimulado, receita);
 
@@ -626,7 +617,7 @@ export default function DashboardPage() {
         parcelasReceitaPct: ratio(parcelasValor, receita),
         margemLucroReal: margemLucro,
         margemLucroSimulada: margemSimulada,
-        ganhoMargem: categoriasExcluidas.length > 0 || scenario.zerarParcelas || scenario.zerarExtras || scenario.folhaMeta14 || scenario.aluguel20
+        ganhoMargem: categoriasExcluidas.length > 0 || Object.values(simulationTargets).some((value) => String(value || "").trim() !== "")
           ? Math.max(0, margemSimulada - margemLucro)
           : 0,
         impactoFinanceiroSimulado: economiaTotal,
@@ -941,7 +932,7 @@ export default function DashboardPage() {
     mesesDisponiveis,
     timelineMetric,
     benchmarkMetric,
-    scenario,
+    simulationTargets,
     waterfallMode,
     waterfallAgfId,
   ]);
@@ -960,8 +951,12 @@ export default function DashboardPage() {
   const handleMultiSelect = (setter: Function, value: any) =>
     setter((previous: any[]) => (previous.includes(value) ? previous.filter((item) => item !== value) : [...previous, value]));
 
-  const toggleScenario = (key: keyof ScenarioState) => {
-    setScenario((previous) => ({ ...previous, [key]: !previous[key] }));
+  const setQuickTarget = (categoria: string, value: string) => {
+    setSimulationTargets((previous) => ({ ...previous, [categoria]: value }));
+  };
+
+  const updateSimulationTarget = (categoria: string, value: string) => {
+    setSimulationTargets((previous) => ({ ...previous, [categoria]: value }));
   };
 
   const tickStyle = { fill: "#E9F2FF", opacity: 0.75, fontSize: 11 };
@@ -1542,16 +1537,16 @@ export default function DashboardPage() {
             <p className="text-sm text-text/80 mb-2">Cenarios consultivos rapidos:</p>
             <div className="flex flex-wrap gap-2">
               {[
-                { key: "zerarParcelas", label: "Zerar Parcelas" },
-                { key: "zerarExtras", label: "Zerar Extras" },
-                { key: "folhaMeta14", label: "Folha em 14%" },
-                { key: "aluguel20", label: "Reduzir Aluguel 20%" },
+                { categoria: "parcela_debitos", value: "0", label: "Parcelas em 0%" },
+                { categoria: "extras", value: "0", label: "Extras em 0%" },
+                { categoria: "folha_pagamento", value: "14", label: "Folha em 14%" },
+                { categoria: "comissoes", value: "10", label: "Comissoes em 10%" },
               ].map((scenarioButton) => (
                 <button
-                  key={scenarioButton.key}
-                  onClick={() => toggleScenario(scenarioButton.key as keyof ScenarioState)}
+                  key={`${scenarioButton.categoria}-${scenarioButton.value}`}
+                  onClick={() => setQuickTarget(scenarioButton.categoria, scenarioButton.value)}
                   className={`px-3 py-1 text-xs rounded-full transition-colors ${
-                    scenario[scenarioButton.key as keyof ScenarioState]
+                    simulationTargets[scenarioButton.categoria] === scenarioButton.value
                       ? "bg-amber-500 text-background-start"
                       : "bg-white/10 text-text/80 hover:bg-white/20"
                   }`}
@@ -1560,6 +1555,34 @@ export default function DashboardPage() {
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="mb-5">
+            <p className="text-sm text-text/80 mb-2">Metas por categoria (% da receita):</p>
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+              {["folha_pagamento", "comissoes", "aluguel", "extras", "impostos", "parcela_debitos"].map((categoria) => (
+                <label key={categoria} className="bg-white/5 border border-white/10 rounded-lg p-3 text-sm">
+                  <span className="block text-text/70 mb-2">{CATEGORY_LABELS[categoria] || categoria}</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step="0.1"
+                      value={simulationTargets[categoria] ?? ""}
+                      onChange={(event) => updateSimulationTarget(categoria, event.target.value)}
+                      placeholder="Ex: 14"
+                      className="w-full bg-background-end border border-primary/30 rounded-md px-3 py-2 text-sm text-text"
+                    />
+                    <span className="text-text/60">%</span>
+                  </div>
+                </label>
+              ))}
+            </div>
+            <p className="text-xs text-text/55 mt-3">
+              A meta e sempre lida como percentual da receita. Exemplo: Folha em 14% significa projetar cada AGF com
+              folha total equivalente a 14% da receita filtrada.
+            </p>
           </div>
 
           <ChartContainer title="" className="h-[440px]" chartMinWidth={Math.max(720, dadosProcessados.totaisPorAgf.length * 90)}>
