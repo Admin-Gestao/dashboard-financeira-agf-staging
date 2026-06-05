@@ -9,18 +9,18 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        primary: '#C8861A',
-        secondary: '#8C5A13',
+        primary: '#A67C3A',
+        secondary: '#C49B52',
         background: {
-          start: '#010440',
-          end: '#020654',
+          start: '#010326',
+          end: '#020540',
         },
-        text: '#F0EDE8',
-        card: '#020654',
-        success: '#2DD4A0',
-        info: '#6B85C4',
-        destructive: '#E05C6A',
-        warning: '#D4A853',
+        text: '#EAE6DF',
+        card: '#020540',
+        success: '#27B08B',
+        info: '#5E7FC4',
+        destructive: '#D95F6E',
+        warning: '#C49B52',
       },
       fontFamily: {
         sans: ["Inter", "sans-serif"],
