@@ -1063,7 +1063,13 @@ export default function DashboardPage() {
           <ChartContainer
             title="Resultado ao longo do tempo"
             className="h-[360px]"
-            actions={<SegmentedControl items={TIMELINE_METRICS} value={timelineMetric} onChange={setTimelineMetric} />}
+            actions={
+              <SegmentedControl<TimelineMetric>
+                items={TIMELINE_METRICS}
+                value={timelineMetric}
+                onChange={(value) => setTimelineMetric(value)}
+              />
+            }
           >
             <AreaChart data={dadosProcessados.evolucaoTemporal} margin={{ top: 10, right: 20, left: 12, bottom: 5 }}>
               <defs>
@@ -1151,7 +1157,13 @@ export default function DashboardPage() {
             title="Benchmark vs Grupo"
             className="h-[360px]"
             chartMinWidth={dadosProcessados.agfChartMinWidth}
-            actions={<SegmentedControl items={BENCHMARK_METRICS} value={benchmarkMetric} onChange={setBenchmarkMetric} />}
+            actions={
+              <SegmentedControl<BenchmarkMetric>
+                items={BENCHMARK_METRICS}
+                value={benchmarkMetric}
+                onChange={(value) => setBenchmarkMetric(value)}
+              />
+            }
           >
             <BarChart data={dadosProcessados.benchmarkRows} layout="vertical" margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(233, 242, 255, 0.1)" />
@@ -1287,7 +1299,7 @@ export default function DashboardPage() {
             chartMinWidth={Math.max(760, dadosProcessados.waterfallData.length * 96)}
             actions={
               <div className="flex flex-wrap gap-2 items-center">
-                <SegmentedControl
+                <SegmentedControl<"consolidado" | "agf">
                   items={[
                     { key: "consolidado", label: "Consolidado" },
                     { key: "agf", label: "Por AGF" },
