@@ -39,21 +39,21 @@ const ALERT_LIMITS = {
 };
 
 const RISK_COLORS = {
-  low: "#48DB8A",
-  medium: "#F2C14E",
-  high: "#FF6B57",
+  low: "#2DD4A0",
+  medium: "#D4A853",
+  high: "#E05C6A",
 };
 
 const CHART_COLORS = {
-  receita: "#66AEFF",
-  despesa: "#FF6F61",
-  resultado: "#43D18E",
-  margem: "#A37BFF",
-  objetos: "#E4BE63",
-  folha: "#5F88FF",
-  parcela: "#F4A261",
-  extras: "#D9923B",
-  warning: "#E4BE63",
+  receita: "#6B85C4",
+  despesa: "#E05C6A",
+  resultado: "#2DD4A0",
+  margem: "#9A7FF0",
+  objetos: "#D4A853",
+  folha: "#7A93D6",
+  parcela: "#D4A853",
+  extras: "#C8861A",
+  warning: "#D4A853",
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -239,11 +239,11 @@ const Card = ({
   valueColor?: string;
   subtitle?: string;
 }) => (
-  <div className="dashboard-surface p-3.5 md:p-4 border-l-[3px]" style={{ borderLeftColor: borderColor }}>
+  <div className="dashboard-surface dashboard-surface-hover p-3.5 md:p-4 border-t-[2px]" style={{ borderTopColor: borderColor }}>
     <div className="flex items-start justify-between gap-3">
       <div>
         <h3 className="text-[11px] uppercase tracking-[0.12em] text-text/52 font-semibold">{title}</h3>
-        <p className={`mt-2 text-[1.55rem] md:text-[1.7rem] leading-none font-semibold ${valueColor || "text-text"}`}>{value}</p>
+        <p className={`tabular mt-2 text-[1.55rem] md:text-[1.7rem] leading-none font-semibold ${valueColor || "text-text"}`}>{value}</p>
       </div>
     </div>
     {subtitle ? <p className="text-[11px] text-text/48 mt-2">{subtitle}</p> : null}
@@ -263,9 +263,9 @@ const ChartContainer = ({
   chartMinWidth?: number;
   actions?: ReactElement;
 }) => (
-  <div className={`dashboard-surface p-3.5 md:p-4 flex flex-col ${className}`}>
+  <div className={`dashboard-surface dashboard-surface-hover p-3.5 md:p-4 flex flex-col ${className}`}>
     <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between mb-3">
-      {title ? <h3 className="font-semibold text-[0.98rem] tracking-[-0.015em] text-text">{title}</h3> : <span />}
+      {title ? <h3 className="font-display italic font-normal text-[1.03rem] tracking-[-0.01em] text-text">{title}</h3> : <span />}
       {actions ?? null}
     </div>
     <div className="flex-grow h-full w-full overflow-x-auto overflow-y-hidden pb-2">
@@ -287,15 +287,15 @@ const SegmentedControl = <T extends string>({
   value: T;
   onChange: (value: T) => void;
 }) => (
-  <div className="inline-flex flex-wrap gap-1.5">
+  <div className="inline-flex flex-wrap gap-1 bg-background-start/70 border border-[rgba(242,167,92,0.10)] rounded-md p-[3px]">
     {items.map((item) => (
       <button
         key={item.key}
         onClick={() => onChange(item.key)}
-        className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] transition-colors ${
+        className={`rounded-[4px] px-3 py-[5px] text-[10px] font-semibold uppercase tracking-[0.08em] transition-colors ${
           value === item.key
-            ? "bg-primary text-background-start shadow-[0_10px_24px_-14px_rgba(214,163,93,0.9)]"
-            : "bg-white/[0.06] text-text/66 hover:bg-white/[0.12]"
+            ? "bg-primary text-background-start"
+            : "bg-transparent text-text/50 hover:text-text/75 hover:bg-background-end/90"
         }`}
       >
         {item.label}
@@ -308,7 +308,7 @@ const CustomTooltip = ({ active, payload, label, formatter }: any) => {
   if (!active || !payload?.length) return null;
 
   return (
-    <div className="rounded-xl border border-white/[0.08] bg-[#0E1430]/95 px-3 py-2.5 text-[12px] shadow-[0_24px_50px_-35px_rgba(0,0,0,0.95)]">
+    <div className="dashboard-muted-surface px-3 py-2.5 text-[12px] shadow-[0_10px_30px_-22px_rgba(0,0,0,0.95)]">
       <p className="font-bold mb-1">{label}</p>
       {payload.map((item: any, index: number) => (
         <p key={index} style={{ color: item.color || item.fill || item.stroke }}>
@@ -345,7 +345,7 @@ const MultiSelectFilter = ({
     <div className="relative" ref={ref}>
       <button
         onClick={() => setIsOpen((previous) => !previous)}
-        className="dashboard-muted-surface text-white px-4 py-2.5 focus:ring-2 focus:ring-primary w-full flex justify-between items-center text-[13px]"
+        className="dashboard-muted-surface text-white px-4 py-2.5 focus:ring-2 focus:ring-primary w-full flex justify-between items-center text-[12px] hover:border-[color:var(--border-medium)]"
       >
         <span>
           {name} ({selected.length === 0 ? "Todos" : selected.length})
@@ -355,12 +355,12 @@ const MultiSelectFilter = ({
       {isOpen ? (
         <div className="absolute z-10 top-full mt-2 w-full dashboard-surface max-h-60 overflow-y-auto">
           {options.map((option) => (
-            <label key={option.id} className="flex items-center gap-2 px-3 py-2.5 text-[13px] hover:bg-white/[0.05] cursor-pointer">
+            <label key={option.id} className="flex items-center gap-2 px-3 py-2.5 text-[12px] hover:bg-[rgba(200,134,26,0.08)] cursor-pointer">
               <input
                 type="checkbox"
                 checked={selected.includes(option.id)}
                 onChange={() => onSelect(option.id)}
-                className="form-checkbox h-4 w-4 text-primary bg-card border-primary/50 rounded focus:ring-primary"
+                className="form-checkbox h-4 w-4 text-primary bg-background-end border-primary/50 rounded focus:ring-primary"
               />
               <span>{option.nome}</span>
             </label>
@@ -374,10 +374,10 @@ const MultiSelectFilter = ({
 const AlertBadge = ({ level }: { level: "high" | "medium" | "low" }) => {
   const classes =
     level === "high"
-      ? "bg-red-500/20 text-red-200 border-red-400/40"
+      ? "bg-[rgba(224,92,106,0.10)] text-[#E05C6A] border-[rgba(224,92,106,0.25)]"
       : level === "medium"
-        ? "bg-amber-500/20 text-amber-200 border-amber-400/40"
-        : "bg-emerald-500/20 text-emerald-200 border-emerald-400/40";
+        ? "bg-[rgba(212,168,83,0.10)] text-[#D4A853] border-[rgba(212,168,83,0.20)]"
+        : "bg-[rgba(45,212,160,0.10)] text-[#2DD4A0] border-[rgba(45,212,160,0.20)]";
 
   const label = level === "high" ? "Critico" : level === "medium" ? "Atencao" : "Monitorar";
 
@@ -1013,7 +1013,7 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-background-start text-white">
+      <div className="flex items-center justify-center h-screen bg-background-start text-text">
         <div className="p-6 text-lg">Carregando dados...</div>
       </div>
     );
@@ -1029,7 +1029,7 @@ export default function DashboardPage() {
 
   if (!empresaId && !apiData) {
     return (
-      <div className="flex items-center justify-center h-screen bg-background-start text-white">
+      <div className="flex items-center justify-center h-screen bg-background-start text-text">
         <div className="p-6 text-lg">
           ID nao fornecido. Adicione <code>?user_id=...</code> ou <code>?empresa_id=...</code> a URL.
         </div>
@@ -1152,7 +1152,7 @@ export default function DashboardPage() {
         <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <div className="dashboard-surface p-3.5 md:p-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-[0.98rem] text-text">Variacao mes contra mes</h3>
+              <h3 className="font-display italic font-normal text-[1.03rem] text-text">Variacao mes contra mes</h3>
               {dadosProcessados.resumoPeriodoAtual && dadosProcessados.resumoPeriodoAnterior ? (
                 <span className="text-xs text-text/60">
                   {dadosProcessados.resumoPeriodoAnterior.label} → {dadosProcessados.resumoPeriodoAtual.label}
@@ -1172,15 +1172,15 @@ export default function DashboardPage() {
                 </thead>
                 <tbody>
                   {dadosProcessados.totaisPorAgf.map((item) => (
-                    <tr key={item.id} className="border-b border-white/5">
+                    <tr key={item.id} className="border-b border-white/5 hover:bg-[rgba(200,134,26,0.08)] transition-colors">
                       <td className="py-2 px-2">{item.nome}</td>
-                      <td className={`py-2 px-2 text-right ${item.variacaoReceita >= 0 ? "text-success" : "text-destructive"}`}>
+                      <td className={`tabular py-2 px-2 text-right ${item.variacaoReceita >= 0 ? "text-success" : "text-destructive"}`}>
                         {formatPercent(item.variacaoReceita)}
                       </td>
-                      <td className={`py-2 px-2 text-right ${item.variacaoDespesa <= 0 ? "text-success" : "text-warning"}`}>
+                      <td className={`tabular py-2 px-2 text-right ${item.variacaoDespesa <= 0 ? "text-success" : "text-warning"}`}>
                         {formatPercent(item.variacaoDespesa)}
                       </td>
-                      <td className={`py-2 px-2 text-right ${item.variacaoMargemPp >= 0 ? "text-success" : "text-destructive"}`}>
+                      <td className={`tabular py-2 px-2 text-right ${item.variacaoMargemPp >= 0 ? "text-success" : "text-destructive"}`}>
                         {item.variacaoMargemPp >= 0 ? "+" : ""}
                         {item.variacaoMargemPp.toFixed(1)} pp
                       </td>
@@ -1188,12 +1188,12 @@ export default function DashboardPage() {
                         <span
                           className={`inline-flex rounded-full px-2 py-1 text-[11px] font-semibold ${
                             item.status === "Benchmark"
-                              ? "bg-emerald-500/20 text-emerald-200"
-                              : item.status === "Critico"
-                                ? "bg-red-500/20 text-red-200"
-                                : "bg-amber-500/20 text-amber-200"
-                          }`}
-                        >
+                            ? "bg-[rgba(45,212,160,0.10)] text-[#2DD4A0]"
+                            : item.status === "Critico"
+                              ? "bg-[rgba(224,92,106,0.10)] text-[#E05C6A]"
+                              : "bg-[rgba(212,168,83,0.10)] text-[#D4A853]"
+                        }`}
+                      >
                           {item.status}
                         </span>
                       </td>
@@ -1325,7 +1325,7 @@ export default function DashboardPage() {
                   if (!active || !payload?.length) return null;
                   const item = payload[0].payload;
                   return (
-                    <div className="rounded-xl border border-white/[0.08] bg-[#0E1430]/95 px-3 py-2.5 text-[12px] shadow-[0_24px_50px_-35px_rgba(0,0,0,0.95)]">
+                    <div className="dashboard-muted-surface px-3 py-2.5 text-[12px] shadow-[0_10px_30px_-22px_rgba(0,0,0,0.95)]">
                       <p className="font-bold mb-1">{item.nome}</p>
                       <p>Receita: {formatCurrency(item.receita)}</p>
                       <p>Margem: {formatPercent(item.margem)}</p>
@@ -1409,53 +1409,53 @@ export default function DashboardPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="dashboard-surface p-3.5">
-              <h3 className="font-bold mb-3 text-[1.02rem]">Ranking de Margem</h3>
+              <h3 className="font-display italic font-normal mb-3 text-[1.03rem]">Ranking de Margem</h3>
               <div className="space-y-3">
                 {dadosProcessados.rankingConsultivo.margem.map((item, index) => (
                   <div key={item.id} className="flex items-center justify-between text-sm">
                     <span>
                       {index + 1}. {item.nome}
                     </span>
-                    <span className="text-success font-semibold">{formatPercent(item.margemLucro)}</span>
+                    <span className="tabular text-success font-semibold">{formatPercent(item.margemLucro)}</span>
                   </div>
                 ))}
               </div>
             </div>
             <div className="dashboard-surface p-3.5">
-              <h3 className="font-bold mb-3 text-[1.02rem]">Ranking de Folha Eficiente</h3>
+              <h3 className="font-display italic font-normal mb-3 text-[1.03rem]">Ranking de Folha Eficiente</h3>
               <div className="space-y-3">
                 {dadosProcessados.rankingConsultivo.folha.map((item, index) => (
                   <div key={item.id} className="flex items-center justify-between text-sm">
                     <span>
                       {index + 1}. {item.nome}
                     </span>
-                    <span className="text-info font-semibold">{formatPercent(item.folhaReceitaPct)}</span>
+                    <span className="tabular text-info font-semibold">{formatPercent(item.folhaReceitaPct)}</span>
                   </div>
                 ))}
               </div>
             </div>
             <div className="dashboard-surface p-3.5">
-              <h3 className="font-bold mb-3 text-[1.02rem]">Ranking de Aluguel Critico</h3>
+              <h3 className="font-display italic font-normal mb-3 text-[1.03rem]">Ranking de Aluguel Critico</h3>
               <div className="space-y-3">
                 {dadosProcessados.rankingConsultivo.aluguel.map((item, index) => (
                   <div key={item.id} className="flex items-center justify-between text-sm">
                     <span>
                       {index + 1}. {item.nome}
                     </span>
-                    <span className="text-warning font-semibold">{formatPercent(item.aluguelReceitaPct)}</span>
+                    <span className="tabular text-warning font-semibold">{formatPercent(item.aluguelReceitaPct)}</span>
                   </div>
                 ))}
               </div>
             </div>
             <div className="dashboard-surface p-3.5">
-              <h3 className="font-bold mb-3 text-[1.02rem]">Ranking de Passivo Oculto</h3>
+              <h3 className="font-display italic font-normal mb-3 text-[1.03rem]">Ranking de Passivo Oculto</h3>
               <div className="space-y-3">
                 {dadosProcessados.rankingConsultivo.risco.map((item, index) => (
                   <div key={item.id} className="flex items-center justify-between text-sm">
                     <span>
                       {index + 1}. {item.nome}
                     </span>
-                    <span className="text-destructive font-semibold">{formatCurrency(item.riscoExtraordinario)}</span>
+                    <span className="tabular text-destructive font-semibold">{formatCurrency(item.riscoExtraordinario)}</span>
                   </div>
                 ))}
               </div>
@@ -1465,7 +1465,7 @@ export default function DashboardPage() {
 
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="dashboard-surface p-3.5 md:p-4 lg:col-span-1">
-            <h3 className="font-semibold mb-3 text-[0.98rem] text-text">Objetos tratados</h3>
+            <h3 className="font-display italic font-normal mb-3 text-[1.03rem] text-text">Objetos tratados</h3>
             <div className="overflow-x-auto">
               <table className="w-full text-[13px]">
                 <thead>
@@ -1483,9 +1483,9 @@ export default function DashboardPage() {
                     </tr>
                   ) : (
                     dadosProcessados.totaisPorAgf.map((item) => (
-                      <tr key={item.id} className="border-b border-white/5">
+                      <tr key={item.id} className="border-b border-white/5 hover:bg-[rgba(200,134,26,0.08)] transition-colors">
                         <td className="py-2 px-2">{item.nome}</td>
-                        <td className="py-2 px-2 text-right">{formatNumber(item.objetos)}</td>
+                        <td className="tabular py-2 px-2 text-right">{formatNumber(item.objetos)}</td>
                       </tr>
                     ))
                   )}
@@ -1496,7 +1496,7 @@ export default function DashboardPage() {
 
           <div className="dashboard-surface p-3.5 md:p-4 lg:col-span-2">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-[0.98rem] text-text">Despesas por categoria</h3>
+              <h3 className="font-display italic font-normal text-[1.03rem] text-text">Despesas por categoria</h3>
               <span className="text-xs text-text/60">Heatmap por peso da despesa sobre a receita</span>
             </div>
             <div className="overflow-x-auto">
@@ -1527,7 +1527,7 @@ export default function DashboardPage() {
                               backgroundColor: `rgba(255, 107, 87, ${0.08 + intensidade * 0.32})`,
                             }}
                           >
-                            <div className="font-semibold text-text">{formatCompact(item.despesasDetalhadas[categoria] || 0)}</div>
+                            <div className="tabular font-semibold text-text">{formatCompact(item.despesasDetalhadas[categoria] || 0)}</div>
                             <div className="text-[11px] text-text/70">{formatPercent(percentual)}</div>
                           </td>
                         );
@@ -1543,7 +1543,7 @@ export default function DashboardPage() {
         <section className="dashboard-surface p-3.5 md:p-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between mb-4">
             <div>
-              <h3 className="font-semibold text-[0.98rem] text-text">Simulacao de Margem de Lucro</h3>
+              <h3 className="font-display italic font-normal text-[1.03rem] text-text">Simulacao de Margem de Lucro</h3>
               <p className="text-[13px] text-text/70 mt-1">Teste metas por categoria e veja o impacto direto na margem.</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-[280px]">
