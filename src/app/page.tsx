@@ -210,6 +210,11 @@ function pctChange(current: number, previous: number) {
   return ((current - previous) / previous) * 100;
 }
 
+function safeNumber(value: unknown) {
+  const numeric = Number(value ?? 0);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
 function median(values: number[]) {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
@@ -801,29 +806,32 @@ export default function DashboardPage() {
       waterfallMode === "agf" && waterfallSelected
         ? {
             nome: waterfallSelected.nome,
-            receita: waterfallSelected.receita,
-            despesaTotal: waterfallSelected.despesaTotal,
-            resultado: waterfallSelected.resultado,
+            receita: safeNumber(waterfallSelected.receita),
+            despesaTotal: safeNumber(waterfallSelected.despesaTotal),
+            resultado: safeNumber(waterfallSelected.resultado),
             despesasDetalhadas: waterfallSelected.despesasDetalhadas,
-            ajusteSubcontas: waterfallSelected.ajusteSubcontas,
+            ajusteSubcontas: safeNumber(waterfallSelected.ajusteSubcontas),
           }
         : {
             nome: "Consolidado",
-            receita: totaisGerais.receita,
-            despesaTotal: totaisGerais.despesa,
-            resultado: totaisGerais.resultado,
+            receita: safeNumber(totaisGerais.receita),
+            despesaTotal: safeNumber(totaisGerais.despesa),
+            resultado: safeNumber(totaisGerais.resultado),
             despesasDetalhadas: sourceCategorias.reduce((acc, categoria) => {
-              acc[categoria] = totaisPorAgf.reduce((sum, item) => sum + Number(item.despesasDetalhadas[categoria] || 0), 0);
+              acc[categoria] = safeNumber(
+                totaisPorAgf.reduce((sum, item) => sum + Number(item.despesasDetalhadas[categoria] || 0), 0)
+              );
               return acc;
             }, {} as Record<string, number>),
-            ajusteSubcontas:
+            ajusteSubcontas: safeNumber(
               totaisGerais.despesa -
-              sourceCategorias.reduce(
-                (sum, categoria) =>
-                  sum +
-                  totaisPorAgf.reduce((acc, item) => acc + Number(item.despesasDetalhadas[categoria] || 0), 0),
-                0
-              ),
+                sourceCategorias.reduce(
+                  (sum, categoria) =>
+                    sum +
+                    totaisPorAgf.reduce((acc, item) => acc + Number(item.despesasDetalhadas[categoria] || 0), 0),
+                  0
+                )
+            ),
           };
 
     const waterfallOrder = [
@@ -844,7 +852,7 @@ export default function DashboardPage() {
       ...waterfallOrder
         .map((categoria) => ({
           name: CATEGORY_LABELS[categoria] || categoria,
-          amount: -Number(waterfallBase.despesasDetalhadas[categoria] || 0),
+          amount: -safeNumber(waterfallBase.despesasDetalhadas[categoria] || 0),
           fill:
             categoria === "parcela_debitos"
               ? CHART_COLORS.parcela
@@ -858,7 +866,7 @@ export default function DashboardPage() {
     if (Math.abs(waterfallBase.ajusteSubcontas) > 1) {
       waterfallSteps.push({
         name: waterfallBase.ajusteSubcontas > 0 ? "Outras despesas" : "Ajuste favoravel",
-        amount: -waterfallBase.ajusteSubcontas,
+        amount: -safeNumber(waterfallBase.ajusteSubcontas),
         fill: CHART_COLORS.warning,
       });
     }
@@ -867,12 +875,12 @@ export default function DashboardPage() {
     let running = 0;
 
     for (const step of waterfallSteps) {
-      const next = running + step.amount;
+      const next = safeNumber(running + step.amount);
       waterfallData.push({
         name: step.name,
-        base: Math.min(running, next),
-        value: Math.abs(step.amount),
-        realValue: step.amount,
+        base: safeNumber(Math.min(running, next)),
+        value: safeNumber(Math.abs(step.amount)),
+        realValue: safeNumber(step.amount),
         fill: step.fill,
       });
       running = next;
@@ -880,9 +888,9 @@ export default function DashboardPage() {
 
     waterfallData.push({
       name: "Resultado",
-      base: Math.min(0, waterfallBase.resultado),
-      value: Math.abs(waterfallBase.resultado),
-      realValue: waterfallBase.resultado,
+      base: safeNumber(Math.min(0, waterfallBase.resultado)),
+      value: safeNumber(Math.abs(waterfallBase.resultado)),
+      realValue: safeNumber(waterfallBase.resultado),
       fill: waterfallBase.resultado >= 0 ? CHART_COLORS.resultado : CHART_COLORS.despesa,
     });
 
@@ -898,8 +906,8 @@ export default function DashboardPage() {
         nome: item.nome,
         receita: item.receita,
         margem: item.margemLucro,
-        z: Math.max(3000, item.riscoExtraordinario),
-        riscoExtraordinario: item.riscoExtraordinario,
+        z: safeNumber(Math.max(3000, item.riscoExtraordinario)),
+        riscoExtraordinario: safeNumber(item.riscoExtraordinario),
         fill: RISK_COLORS[riskLevel],
       };
     });
@@ -1283,7 +1291,7 @@ export default function DashboardPage() {
                   );
                 }}
               />
-              <Scatter data={dadosProcessados.matrixRows} name="AGFs">
+              <Scatter data={dadosProcessados.matrixRows} name="AGFs" isAnimationActive={false}>
                 {dadosProcessados.matrixRows.map((item) => (
                   <Cell key={item.nome} fill={item.fill} />
                 ))}
@@ -1328,14 +1336,21 @@ export default function DashboardPage() {
               <XAxis dataKey="name" interval={0} angle={-25} textAnchor="end" height={86} tick={tickStyle} />
               <YAxis tickFormatter={formatCompact} tick={tickStyle} />
               <Tooltip
-                content={<CustomTooltip formatter={formatCurrency} />}
-                formatter={(value: number, _name: string, props: any) => [
-                  formatCurrency(Number(props.payload.realValue || 0)),
-                  props.payload.name,
-                ]}
+                content={({ active, payload }: any) => {
+                  if (!active || !payload?.length) return null;
+                  const item = payload[0]?.payload;
+                  if (!item) return null;
+
+                  return (
+                    <div className="bg-background-end p-3 border border-primary/50 rounded-md text-sm shadow-lg">
+                      <p className="font-bold mb-1">{item.name}</p>
+                      <p>Impacto: {formatCurrency(safeNumber(item.realValue))}</p>
+                    </div>
+                  );
+                }}
               />
-              <Bar dataKey="base" stackId="waterfall" fill="transparent" />
-              <Bar dataKey="value" stackId="waterfall" name="Impacto">
+              <Bar dataKey="base" stackId="waterfall" fill="transparent" isAnimationActive={false} />
+              <Bar dataKey="value" stackId="waterfall" name="Impacto" isAnimationActive={false}>
                 {dadosProcessados.waterfallData.map((item) => (
                   <Cell key={item.name} fill={item.fill} />
                 ))}
