@@ -7,8 +7,8 @@
 @layer base {
   :root {
     --bg-base: #010326;
-    --bg-surface: rgba(6, 6, 11, 0.5);
-    --bg-elevated: rgba(6, 6, 11, 0.58);
+    --bg-surface: rgba(31, 31, 60, 0.5);
+    --bg-elevated: rgba(31, 31, 60, 0.72);
     --bg-input: #121834;
     --bg-overlay: rgba(2, 6, 84, 0.6);
 
@@ -87,7 +87,7 @@
 @layer components {
   .dashboard-surface {
     @apply rounded-[10px];
-    background: linear-gradient(180deg, rgba(6, 6, 11, 0.5), rgba(6, 6, 11, 0.5));
+    background: linear-gradient(180deg, rgba(31, 31, 60, 0.5), rgba(31, 31, 60, 0.5));
     border: 1px solid rgba(180, 160, 100, 0.08);
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.015);
     backdrop-filter: blur(12px);
@@ -95,7 +95,7 @@
 
   .dashboard-muted-surface {
     @apply rounded-[8px];
-    background: linear-gradient(180deg, rgba(6, 6, 11, 0.5), rgba(6, 6, 11, 0.56));
+    background: linear-gradient(180deg, rgba(31, 31, 60, 0.82), rgba(31, 31, 60, 0.88));
     border: 1px solid rgba(180, 160, 100, 0.08);
   }
 
