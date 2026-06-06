@@ -1292,7 +1292,7 @@ export default function DashboardPage() {
               <XAxis dataKey="nome" interval={0} angle={-22} textAnchor="end" height={76} tickMargin={18} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
               <YAxis hide />
               <Tooltip content={<CustomTooltip formatter={formatCurrency} />} cursor={{ fill: "rgba(166,124,58,0.05)" }} />
-              <Bar dataKey="receita" fill={CHART_COLORS.receita} name="Receita" barSize={30} radius={[6, 6, 0, 0]} activeBar={{ fill: "#7390d5", radius: [6, 6, 0, 0] }}>
+              <Bar dataKey="receita" fill={CHART_COLORS.receita} name="Receita" barSize={30} radius={[6, 6, 0, 0]} activeBar={{ fill: "#7390d5" }}>
                 <LabelList dataKey="receita" position="top" offset={10} formatter={(value: number) => formatCompact(value)} style={{ fill: "#EAE6DF", fontSize: 10, fontFamily: "Inter, sans-serif" }} />
               </Bar>
             </BarChart>
@@ -1303,7 +1303,7 @@ export default function DashboardPage() {
               <XAxis dataKey="nome" interval={0} angle={-22} textAnchor="end" height={76} tickMargin={18} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
               <YAxis hide />
               <Tooltip content={<CustomTooltip formatter={formatCurrency} />} cursor={{ fill: "rgba(166,124,58,0.05)" }} />
-              <Bar dataKey="despesaTotal" fill={CHART_COLORS.despesa} name="Despesa" barSize={30} radius={[6, 6, 0, 0]} activeBar={{ fill: "#e3717e", radius: [6, 6, 0, 0] }}>
+              <Bar dataKey="despesaTotal" fill={CHART_COLORS.despesa} name="Despesa" barSize={30} radius={[6, 6, 0, 0]} activeBar={{ fill: "#e3717e" }}>
                 <LabelList dataKey="despesaTotal" position="top" offset={10} formatter={(value: number) => formatCompact(value)} style={{ fill: "#EAE6DF", fontSize: 10, fontFamily: "Inter, sans-serif" }} />
               </Bar>
             </BarChart>
@@ -1314,7 +1314,7 @@ export default function DashboardPage() {
               <XAxis dataKey="nome" interval={0} angle={-22} textAnchor="end" height={76} tickMargin={18} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
               <YAxis hide />
               <Tooltip content={<CustomTooltip formatter={formatCurrency} />} cursor={{ fill: "rgba(166,124,58,0.05)" }} />
-              <Bar dataKey="resultado" name="Resultado" barSize={30} radius={[6, 6, 0, 0]} activeBar={{ radius: [6, 6, 0, 0] }}>
+              <Bar dataKey="resultado" name="Resultado" barSize={30} radius={[6, 6, 0, 0]} activeBar>
                 {dadosProcessados.totaisPorAgf.map((item) => (
                   <Cell key={item.id} fill={item.resultado >= 0 ? CHART_COLORS.resultado : CHART_COLORS.despesa} />
                 ))}
@@ -1328,7 +1328,7 @@ export default function DashboardPage() {
               <XAxis dataKey="nome" interval={0} angle={-22} textAnchor="end" height={76} tickMargin={18} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
               <YAxis hide />
               <Tooltip content={<CustomTooltip formatter={formatPercent} />} cursor={{ fill: "rgba(166,124,58,0.05)" }} />
-              <Bar dataKey="margemLucro" fill={CHART_COLORS.margem} name="Margem" barSize={30} radius={[6, 6, 0, 0]} activeBar={{ fill: "#a78bf2", radius: [6, 6, 0, 0] }}>
+              <Bar dataKey="margemLucro" fill={CHART_COLORS.margem} name="Margem" barSize={30} radius={[6, 6, 0, 0]} activeBar={{ fill: "#a78bf2" }}>
                 <LabelList dataKey="margemLucro" position="top" offset={10} formatter={(value: number) => formatPercent(value)} style={{ fill: "#EAE6DF", fontSize: 10, fontFamily: "Inter, sans-serif" }} />
               </Bar>
             </BarChart>
@@ -1342,7 +1342,7 @@ export default function DashboardPage() {
               <XAxis dataKey="nome" interval={0} angle={-24} textAnchor="end" height={78} tickMargin={18} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
               <YAxis tickFormatter={formatCompact} tick={tickStyle} tickLine={false} axisLine={false} />
               <Tooltip content={<CustomTooltip formatter={formatCurrency} />} cursor={{ fill: "rgba(166,124,58,0.05)" }} />
-              <Bar dataKey="despesasDetalhadas.folha_pagamento" fill={CHART_COLORS.folha} name="Folha de Pagamento" barSize={22} radius={[6, 6, 0, 0]} activeBar={{ fill: "#8aa0de", radius: [6, 6, 0, 0] }}>
+              <Bar dataKey="despesasDetalhadas.folha_pagamento" fill={CHART_COLORS.folha} name="Folha de Pagamento" barSize={22} radius={[6, 6, 0, 0]} activeBar={{ fill: "#8aa0de" }}>
                 <LabelList
                   dataKey="despesasDetalhadas.folha_pagamento"
                   position="top"
