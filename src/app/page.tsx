@@ -284,6 +284,23 @@ const ChartContainer = ({
   </div>
 );
 
+function GlowActiveDot(props: any) {
+  const { cx, cy } = props;
+
+  if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null;
+
+  return (
+    <g pointerEvents="none">
+      {/* Premium spotlight around the active point without changing chart logic. */}
+      <ellipse cx={cx} cy={cy} rx={48} ry={18} fill="url(#timelineSpotGlow)" opacity={0.72} />
+      <circle cx={cx} cy={cy} r={22} fill="rgba(244, 214, 140, 0.08)" filter="url(#timelineDotGlow)" />
+      <circle cx={cx} cy={cy} r={11} fill="rgba(244, 214, 140, 0.16)" />
+      <circle cx={cx} cy={cy} r={5.5} fill="#F6D982" stroke="#FFF4C2" strokeWidth={1.8} />
+      <circle cx={cx} cy={cy} r={2.4} fill="#FFF4C2" />
+    </g>
+  );
+}
+
 const SegmentedControl = <T extends string>({
   items,
   value,
@@ -328,6 +345,37 @@ const CustomTooltip = ({ active, payload, label, formatter }: any) => {
   );
 };
 
+const PremiumTimelineTooltip = ({
+  active,
+  payload,
+  label,
+  formatter,
+}: {
+  active?: boolean;
+  payload?: Array<{ value?: number; name?: string }>;
+  label?: string;
+  formatter: (value: number) => string;
+}) => {
+  if (!active || !payload?.length) return null;
+
+  const item = payload[0];
+
+  return (
+    <div
+      className="rounded-[12px] px-[16px] py-[14px] text-[12px] shadow-[0_20px_40px_-22px_rgba(0,0,0,0.85)]"
+      style={{
+        background: "rgba(18, 18, 45, 0.9)",
+        border: "1px solid rgba(255,255,255,0.08)",
+        backdropFilter: "blur(16px)",
+      }}
+    >
+      <p className="text-[11px] uppercase tracking-[0.14em] text-text/55 mb-2">{label}</p>
+      <p className="text-[15px] font-semibold text-text mb-1">{item.name}</p>
+      <p className="text-[13px] text-[#DAB670] tabular">{formatter(Number(item.value ?? 0))}</p>
+    </div>
+  );
+};
+
 const MultiSelectFilter = ({
   name,
   options,
@@ -354,7 +402,7 @@ const MultiSelectFilter = ({
     <div className="relative z-[90]" ref={ref}>
       <button
         onClick={() => setIsOpen((previous) => !previous)}
-        className="dashboard-muted-surface text-white px-[14px] py-[7px] focus:ring-2 focus:ring-primary w-full flex justify-between items-center text-[12px] hover:border-[color:var(--border-medium)] h-8"
+        className="dashboard-muted-surface filter-control-surface text-white px-[14px] py-[7px] focus:ring-2 focus:ring-primary w-full flex justify-between items-center text-[12px] hover:border-[color:var(--border-medium)] h-8"
       >
         <span>
           {name} ({selected.length === 0 ? "Todos" : selected.length})
@@ -362,7 +410,7 @@ const MultiSelectFilter = ({
         <ChevronDown size={16} />
       </button>
       {isOpen ? (
-        <div className="absolute z-[140] top-full mt-2 w-full dashboard-surface max-h-60 overflow-y-auto">
+        <div className="absolute z-[140] top-full mt-2 w-full dashboard-surface filter-popover-surface max-h-60 overflow-y-auto">
           {options.map((option) => (
             <label key={option.id} className="flex items-center gap-2 px-3 py-2 text-[12px] hover:bg-[color:var(--accent-muted)] cursor-pointer">
               <input
@@ -1131,11 +1179,29 @@ export default function DashboardPage() {
             <AreaChart data={dadosProcessados.evolucaoTemporal} margin={{ top: 10, right: 20, left: 12, bottom: 5 }}>
               <defs>
                 <linearGradient id="timelineGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#C49B52" stopOpacity={0.32} />
+                  <stop offset="0%" stopColor="#E3C47A" stopOpacity={0.34} />
                   <stop offset="100%" stopColor="#A67C3A" stopOpacity={0} />
                 </linearGradient>
+                <radialGradient id="timelineSpotGlow" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor="rgba(255,244,194,0.55)" />
+                  <stop offset="32%" stopColor="rgba(212,170,106,0.2)" />
+                  <stop offset="100%" stopColor="rgba(212,170,106,0)" />
+                </radialGradient>
                 <filter id="timelineLineGlow" x="-20%" y="-20%" width="140%" height="140%">
-                  <feGaussianBlur stdDeviation="5" result="blur" />
+                  <feGaussianBlur stdDeviation="4.5" result="blur" />
+                  <feColorMatrix
+                    in="blur"
+                    type="matrix"
+                    values="1 0 0 0 0.73  0 1 0 0 0.57  0 0 1 0 0.24  0 0 0 0.8 0"
+                    result="warmGlow"
+                  />
+                  <feMerge>
+                    <feMergeNode in="warmGlow" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+                <filter id="timelineDotGlow" x="-150%" y="-150%" width="300%" height="300%">
+                  <feGaussianBlur stdDeviation="6" result="blur" />
                   <feMerge>
                     <feMergeNode in="blur" />
                     <feMergeNode in="SourceGraphic" />
@@ -1152,13 +1218,16 @@ export default function DashboardPage() {
                 tickFormatter={timelineMetric === "margem" ? (value) => formatPercent(Number(value)) : formatCompact}
               />
               <ReferenceLine y={0} stroke="rgba(255,255,255,0.15)" strokeDasharray="4 4" />
-              <Tooltip content={<CustomTooltip formatter={timelineFormatter} />} cursor={{ stroke: "rgba(166,124,58,0.28)", strokeWidth: 1.5 }} />
+              <Tooltip
+                content={<PremiumTimelineTooltip formatter={timelineFormatter} />}
+                cursor={{ stroke: "rgba(166,124,58,0.18)", strokeWidth: 1.25 }}
+              />
               <Area
                 type="monotone"
                 dataKey="valor"
-                stroke="#C49B52"
-                strokeWidth={8}
-                strokeOpacity={0.16}
+                stroke="#D6AE57"
+                strokeWidth={10}
+                strokeOpacity={0.12}
                 fillOpacity={0}
                 isAnimationActive={false}
                 filter="url(#timelineLineGlow)"
@@ -1168,12 +1237,23 @@ export default function DashboardPage() {
               <Area
                 type="monotone"
                 dataKey="valor"
+                stroke="#D6AE57"
+                strokeWidth={4.5}
+                strokeOpacity={0.2}
+                fillOpacity={0}
+                isAnimationActive={false}
+                dot={false}
+                activeDot={false}
+              />
+              <Area
+                type="monotone"
+                dataKey="valor"
                 name={TIMELINE_METRICS.find((item) => item.key === timelineMetric)?.label || "Resultado"}
                 stroke="#A67C3A"
-                strokeWidth={2.5}
+                strokeWidth={2.4}
                 fill="url(#timelineGradient)"
                 dot={false}
-                activeDot={{ r: 6, fill: "#F3E0B0", stroke: "#A67C3A", strokeWidth: 2 }}
+                activeDot={<GlowActiveDot />}
               />
             </AreaChart>
           </ChartContainer>
