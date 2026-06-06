@@ -87,7 +87,7 @@
 @layer components {
   .dashboard-surface {
     @apply rounded-[10px];
-    background: linear-gradient(180deg, rgba(18, 19, 35, 0.76), rgba(11, 13, 28, 0.8));
+    background: linear-gradient(180deg, rgba(6, 6, 11, 0.3), rgba(6, 6, 11, 0.3));
     border: 1px solid rgba(180, 160, 100, 0.08);
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.015);
     backdrop-filter: blur(12px);
@@ -95,7 +95,7 @@
 
   .dashboard-muted-surface {
     @apply rounded-[8px];
-    background: linear-gradient(180deg, rgba(15, 17, 34, 0.92), rgba(10, 12, 26, 0.96));
+    background: linear-gradient(180deg, rgba(6, 6, 11, 0.42), rgba(6, 6, 11, 0.48));
     border: 1px solid rgba(180, 160, 100, 0.08);
   }
 
