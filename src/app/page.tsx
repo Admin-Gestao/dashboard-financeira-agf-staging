@@ -314,7 +314,10 @@ const CustomTooltip = ({ active, payload, label, formatter }: any) => {
   if (!active || !payload?.length) return null;
 
   return (
-    <div className="dashboard-muted-surface px-[14px] py-[10px] text-[12px] shadow-[0_4px_16px_rgba(0,0,0,0.5)]" style={{ borderColor: "var(--border-medium)" }}>
+    <div
+      className="dashboard-muted-surface px-[14px] py-[10px] text-[12px] shadow-[0_4px_16px_rgba(0,0,0,0.5)]"
+      style={{ borderColor: "var(--border-medium)", backgroundColor: "rgba(6,6,11,0.52)" }}
+    >
       <p className="font-bold mb-1">{label}</p>
       {payload.map((item: any, index: number) => (
         <p key={index} style={{ color: item.color || item.fill || item.stroke }}>
@@ -348,7 +351,7 @@ const MultiSelectFilter = ({
   }, []);
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative z-[90]" ref={ref}>
       <button
         onClick={() => setIsOpen((previous) => !previous)}
         className="dashboard-muted-surface text-white px-[14px] py-[7px] focus:ring-2 focus:ring-primary w-full flex justify-between items-center text-[12px] hover:border-[color:var(--border-medium)] h-8"
@@ -359,7 +362,7 @@ const MultiSelectFilter = ({
         <ChevronDown size={16} />
       </button>
       {isOpen ? (
-        <div className="absolute z-10 top-full mt-2 w-full dashboard-surface max-h-60 overflow-y-auto">
+        <div className="absolute z-[140] top-full mt-2 w-full dashboard-surface max-h-60 overflow-y-auto">
           {options.map((option) => (
             <label key={option.id} className="flex items-center gap-2 px-3 py-2 text-[12px] hover:bg-[color:var(--accent-muted)] cursor-pointer">
               <input
@@ -797,7 +800,7 @@ export default function DashboardPage() {
           fill: gap >= 0 ? CHART_COLORS.resultado : CHART_COLORS.despesa,
         };
       })
-      .sort((a, b) => b.gap - a.gap);
+      .sort((a, b) => b.valorAtual - a.valorAtual);
 
     const rankingConsultivo = {
       margem: [...totaisPorAgf].sort((a, b) => b.margemLucro - a.margemLucro).slice(0, 5),
@@ -901,7 +904,7 @@ export default function DashboardPage() {
       base: safeNumber(Math.min(0, waterfallBase.resultado)),
       value: safeNumber(Math.abs(waterfallBase.resultado)),
       realValue: safeNumber(waterfallBase.resultado),
-      fill: CHART_COLORS.accent,
+      fill: waterfallBase.resultado >= 0 ? CHART_COLORS.resultado : CHART_COLORS.despesa,
     });
 
     const matrixRows = totaisPorAgf.map((item) => {
@@ -937,6 +940,9 @@ export default function DashboardPage() {
       waterfallBase,
       waterfallOptions,
       matrixRows,
+      simulationRows: [...totaisPorAgf].sort(
+        (a, b) => (b.margemLucro + b.ganhoMargem) - (a.margemLucro + a.ganhoMargem)
+      ),
       agfChartMinWidth: Math.max(500, totaisPorAgf.length * 82),
     };
   }, [
@@ -1040,7 +1046,7 @@ export default function DashboardPage() {
   return (
     <div className="p-[14px] md:p-[18px] bg-background-start text-text min-h-screen">
       <main className="max-w-[1540px] mx-auto flex flex-col gap-3">
-        <header className="dashboard-surface grid grid-cols-1 md:grid-cols-3 gap-[10px] p-3">
+        <header className="dashboard-surface relative z-[80] overflow-visible grid grid-cols-1 md:grid-cols-3 gap-[10px] p-3">
           <MultiSelectFilter
             name="AGF"
             options={sourceAgfs}
@@ -1125,27 +1131,49 @@ export default function DashboardPage() {
             <AreaChart data={dadosProcessados.evolucaoTemporal} margin={{ top: 10, right: 20, left: 12, bottom: 5 }}>
               <defs>
                 <linearGradient id="timelineGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#A67C3A" stopOpacity={0.25} />
+                  <stop offset="0%" stopColor="#C49B52" stopOpacity={0.32} />
                   <stop offset="100%" stopColor="#A67C3A" stopOpacity={0} />
                 </linearGradient>
+                <filter id="timelineLineGlow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feGaussianBlur stdDeviation="5" result="blur" />
+                  <feMerge>
+                    <feMergeNode in="blur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis dataKey="label" tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
+              <XAxis dataKey="label" tick={tickStyle} tickMargin={12} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
               <YAxis
                 tick={tickStyle}
+                tickMargin={12}
                 tickLine={false}
                 axisLine={false}
                 tickFormatter={timelineMetric === "margem" ? (value) => formatPercent(Number(value)) : formatCompact}
               />
               <ReferenceLine y={0} stroke="rgba(255,255,255,0.15)" strokeDasharray="4 4" />
-              <Tooltip content={<CustomTooltip formatter={timelineFormatter} />} />
+              <Tooltip content={<CustomTooltip formatter={timelineFormatter} />} cursor={{ stroke: "rgba(166,124,58,0.28)", strokeWidth: 1.5 }} />
+              <Area
+                type="monotone"
+                dataKey="valor"
+                stroke="#C49B52"
+                strokeWidth={8}
+                strokeOpacity={0.16}
+                fillOpacity={0}
+                isAnimationActive={false}
+                filter="url(#timelineLineGlow)"
+                dot={false}
+                activeDot={false}
+              />
               <Area
                 type="monotone"
                 dataKey="valor"
                 name={TIMELINE_METRICS.find((item) => item.key === timelineMetric)?.label || "Resultado"}
                 stroke="#A67C3A"
-                strokeWidth={2}
+                strokeWidth={2.5}
                 fill="url(#timelineGradient)"
+                dot={false}
+                activeDot={{ r: 6, fill: "#F3E0B0", stroke: "#A67C3A", strokeWidth: 2 }}
               />
             </AreaChart>
           </ChartContainer>
@@ -1218,7 +1246,7 @@ export default function DashboardPage() {
               />
             }
           >
-            <BarChart data={dadosProcessados.benchmarkRows} layout="vertical" margin={{ top: 10, right: 14, left: 4, bottom: 4 }} barCategoryGap="9%">
+            <BarChart data={dadosProcessados.benchmarkRows} layout="vertical" margin={{ top: 10, right: 18, left: 4, bottom: 4 }} barCategoryGap="11%">
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis
                 type="number"
@@ -1231,22 +1259,24 @@ export default function DashboardPage() {
                   (dataMax: number) => Math.max(dataMax + 1.5, 0),
                 ]}
               />
-              <YAxis type="category" dataKey="nome" width={128} tickMargin={10} tick={tickStyle} tickLine={false} axisLine={false} />
+              <YAxis type="category" dataKey="nome" width={156} tickMargin={28} tick={tickStyle} tickLine={false} axisLine={false} />
               <ReferenceLine x={0} stroke="rgba(255,255,255,0.15)" strokeDasharray="4 4" />
               <Tooltip
+                cursor={{ fill: "rgba(166,124,58,0.05)" }}
                 content={
                   <CustomTooltip
                     formatter={(value: number) => `${Number(value ?? 0).toFixed(1)} pp`}
                   />
                 }
               />
-              <Bar dataKey="gap" name="Gap vs mediana" barSize={14} radius={[4, 4, 4, 4]}>
+              <Bar dataKey="gap" name="Gap vs mediana" barSize={16} radius={[8, 8, 8, 8]}>
                 {dadosProcessados.benchmarkRows.map((item) => (
                   <Cell key={item.nome} fill={item.fill} />
                 ))}
                 <LabelList
                   dataKey="valorAtual"
                   position="right"
+                  offset={12}
                   formatter={(value: number) => formatPercent(Number(value ?? 0))}
                   style={{ fill: "#EAE6DF", fontSize: 11, fontFamily: "Inter, sans-serif" }}
                 />
@@ -1259,44 +1289,47 @@ export default function DashboardPage() {
           <ChartContainer title="Comparativo de Receita" className="h-[255px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
             <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 12, left: -18, bottom: 5 }} barCategoryGap="8%">
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis dataKey="nome" interval={0} angle={-22} textAnchor="end" height={58} tickMargin={10} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
+              <XAxis dataKey="nome" interval={0} angle={-22} textAnchor="end" height={76} tickMargin={18} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
               <YAxis hide />
-              <Tooltip content={<CustomTooltip formatter={formatCurrency} />} />
-              <Bar dataKey="receita" fill={CHART_COLORS.receita} name="Receita" barSize={30} radius={[4, 4, 0, 0]}>
-                <LabelList dataKey="receita" position="top" formatter={(value: number) => formatCompact(value)} style={{ fill: "#EAE6DF", fontSize: 10, fontFamily: "Inter, sans-serif" }} />
+              <Tooltip content={<CustomTooltip formatter={formatCurrency} />} cursor={{ fill: "rgba(166,124,58,0.05)" }} />
+              <Bar dataKey="receita" fill={CHART_COLORS.receita} name="Receita" barSize={30} radius={[6, 6, 0, 0]} activeBar={{ fill: "#7390d5", radius: [6, 6, 0, 0] }}>
+                <LabelList dataKey="receita" position="top" offset={10} formatter={(value: number) => formatCompact(value)} style={{ fill: "#EAE6DF", fontSize: 10, fontFamily: "Inter, sans-serif" }} />
               </Bar>
             </BarChart>
           </ChartContainer>
           <ChartContainer title="Comparativo de Despesa" className="h-[255px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
             <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 12, left: -18, bottom: 5 }} barCategoryGap="8%">
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis dataKey="nome" interval={0} angle={-22} textAnchor="end" height={58} tickMargin={10} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
+              <XAxis dataKey="nome" interval={0} angle={-22} textAnchor="end" height={76} tickMargin={18} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
               <YAxis hide />
-              <Tooltip content={<CustomTooltip formatter={formatCurrency} />} />
-              <Bar dataKey="despesaTotal" fill={CHART_COLORS.despesa} name="Despesa" barSize={30} radius={[4, 4, 0, 0]}>
-                <LabelList dataKey="despesaTotal" position="top" formatter={(value: number) => formatCompact(value)} style={{ fill: "#EAE6DF", fontSize: 10, fontFamily: "Inter, sans-serif" }} />
+              <Tooltip content={<CustomTooltip formatter={formatCurrency} />} cursor={{ fill: "rgba(166,124,58,0.05)" }} />
+              <Bar dataKey="despesaTotal" fill={CHART_COLORS.despesa} name="Despesa" barSize={30} radius={[6, 6, 0, 0]} activeBar={{ fill: "#e3717e", radius: [6, 6, 0, 0] }}>
+                <LabelList dataKey="despesaTotal" position="top" offset={10} formatter={(value: number) => formatCompact(value)} style={{ fill: "#EAE6DF", fontSize: 10, fontFamily: "Inter, sans-serif" }} />
               </Bar>
             </BarChart>
           </ChartContainer>
           <ChartContainer title="Comparativo de Resultado" className="h-[255px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
             <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 12, left: -18, bottom: 5 }} barCategoryGap="8%">
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis dataKey="nome" interval={0} angle={-22} textAnchor="end" height={58} tickMargin={10} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
+              <XAxis dataKey="nome" interval={0} angle={-22} textAnchor="end" height={76} tickMargin={18} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
               <YAxis hide />
-              <Tooltip content={<CustomTooltip formatter={formatCurrency} />} />
-              <Bar dataKey="resultado" fill={CHART_COLORS.resultado} name="Resultado" barSize={30} radius={[4, 4, 0, 0]}>
-                <LabelList dataKey="resultado" position="top" formatter={(value: number) => formatCompact(value)} style={{ fill: "#EAE6DF", fontSize: 10, fontFamily: "Inter, sans-serif" }} />
+              <Tooltip content={<CustomTooltip formatter={formatCurrency} />} cursor={{ fill: "rgba(166,124,58,0.05)" }} />
+              <Bar dataKey="resultado" name="Resultado" barSize={30} radius={[6, 6, 0, 0]} activeBar={{ radius: [6, 6, 0, 0] }}>
+                {dadosProcessados.totaisPorAgf.map((item) => (
+                  <Cell key={item.id} fill={item.resultado >= 0 ? CHART_COLORS.resultado : CHART_COLORS.despesa} />
+                ))}
+                <LabelList dataKey="resultado" position="top" offset={10} formatter={(value: number) => formatCompact(value)} style={{ fill: "#EAE6DF", fontSize: 10, fontFamily: "Inter, sans-serif" }} />
               </Bar>
             </BarChart>
           </ChartContainer>
           <ChartContainer title="Comparativo de Margem de Lucro (%)" className="h-[255px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
             <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 12, left: -18, bottom: 5 }} barCategoryGap="8%">
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis dataKey="nome" interval={0} angle={-22} textAnchor="end" height={58} tickMargin={10} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
+              <XAxis dataKey="nome" interval={0} angle={-22} textAnchor="end" height={76} tickMargin={18} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
               <YAxis hide />
-              <Tooltip content={<CustomTooltip formatter={formatPercent} />} />
-              <Bar dataKey="margemLucro" fill={CHART_COLORS.margem} name="Margem" barSize={30} radius={[4, 4, 0, 0]}>
-                <LabelList dataKey="margemLucro" position="top" formatter={(value: number) => formatPercent(value)} style={{ fill: "#EAE6DF", fontSize: 10, fontFamily: "Inter, sans-serif" }} />
+              <Tooltip content={<CustomTooltip formatter={formatPercent} />} cursor={{ fill: "rgba(166,124,58,0.05)" }} />
+              <Bar dataKey="margemLucro" fill={CHART_COLORS.margem} name="Margem" barSize={30} radius={[6, 6, 0, 0]} activeBar={{ fill: "#a78bf2", radius: [6, 6, 0, 0] }}>
+                <LabelList dataKey="margemLucro" position="top" offset={10} formatter={(value: number) => formatPercent(value)} style={{ fill: "#EAE6DF", fontSize: 10, fontFamily: "Inter, sans-serif" }} />
               </Bar>
             </BarChart>
           </ChartContainer>
@@ -1306,13 +1339,14 @@ export default function DashboardPage() {
           <ChartContainer title="Folha de Pagamento" className="h-[285px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
             <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 20, left: -10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis dataKey="nome" interval={0} angle={-24} textAnchor="end" height={64} tickMargin={10} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
+              <XAxis dataKey="nome" interval={0} angle={-24} textAnchor="end" height={78} tickMargin={18} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
               <YAxis tickFormatter={formatCompact} tick={tickStyle} tickLine={false} axisLine={false} />
-              <Tooltip content={<CustomTooltip formatter={formatCurrency} />} />
-              <Bar dataKey="despesasDetalhadas.folha_pagamento" fill={CHART_COLORS.folha} name="Folha de Pagamento" barSize={22} radius={[4, 4, 0, 0]}>
+              <Tooltip content={<CustomTooltip formatter={formatCurrency} />} cursor={{ fill: "rgba(166,124,58,0.05)" }} />
+              <Bar dataKey="despesasDetalhadas.folha_pagamento" fill={CHART_COLORS.folha} name="Folha de Pagamento" barSize={22} radius={[6, 6, 0, 0]} activeBar={{ fill: "#8aa0de", radius: [6, 6, 0, 0] }}>
                 <LabelList
                   dataKey="despesasDetalhadas.folha_pagamento"
                   position="top"
+                  offset={10}
                   formatter={(value: number) => formatCompact(value)}
                   style={{ fill: "#EAE6DF", fontSize: 10, fontFamily: "Inter, sans-serif" }}
                 />
@@ -1384,9 +1418,10 @@ export default function DashboardPage() {
           >
             <BarChart data={dadosProcessados.waterfallData} margin={{ top: 20, right: 20, left: 0, bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis dataKey="name" interval={0} angle={-22} textAnchor="end" height={70} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
+              <XAxis dataKey="name" interval={0} angle={-22} textAnchor="end" height={82} tickMargin={18} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
               <YAxis tickFormatter={formatCompact} tick={tickStyle} tickLine={false} axisLine={false} />
               <Tooltip
+                cursor={{ fill: "rgba(166,124,58,0.05)" }}
                 content={({ active, payload }: any) => {
                   if (!active || !payload?.length) return null;
                   const item = payload[0]?.payload;
@@ -1401,13 +1436,14 @@ export default function DashboardPage() {
                 }}
               />
               <Bar dataKey="base" stackId="waterfall" fill="transparent" isAnimationActive={false} />
-              <Bar dataKey="value" stackId="waterfall" name="Impacto" isAnimationActive={false} barSize={24}>
+              <Bar dataKey="value" stackId="waterfall" name="Impacto" isAnimationActive={false} barSize={24} radius={[6, 6, 0, 0]}>
                 {dadosProcessados.waterfallData.map((item) => (
                   <Cell key={item.name} fill={item.fill} />
                 ))}
                 <LabelList
                   dataKey="realValue"
                   position="top"
+                  offset={10}
                   formatter={(value: number) => (Math.abs(value) > 0 ? formatCompact(value) : "")}
                   style={{ fill: "#EAE6DF", fontSize: 11, fontFamily: "Inter, sans-serif" }}
                 />
@@ -1649,17 +1685,17 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <ChartContainer title="" className="h-[290px]" chartMinWidth={Math.max(620, dadosProcessados.totaisPorAgf.length * 84)}>
-            <BarChart data={dadosProcessados.totaisPorAgf} layout="vertical" margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
+          <ChartContainer title="" className="h-[290px]" chartMinWidth={Math.max(620, dadosProcessados.simulationRows.length * 84)}>
+            <BarChart data={dadosProcessados.simulationRows} layout="vertical" margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis type="number" domain={[-100, 100]} tickFormatter={formatPercent} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
-              <YAxis type="category" dataKey="nome" tick={tickStyle} width={136} tickMargin={10} tickLine={false} axisLine={false} />
-              <Tooltip content={<CustomTooltip formatter={formatPercent} />} />
+              <YAxis type="category" dataKey="nome" tick={tickStyle} width={156} tickMargin={28} tickLine={false} axisLine={false} />
+              <Tooltip content={<CustomTooltip formatter={formatPercent} />} cursor={{ fill: "rgba(166,124,58,0.05)" }} />
               <Legend wrapperStyle={{ fontFamily: "Inter, sans-serif", fontSize: "11px", color: "#8B9ABF" }} />
-              <Bar dataKey="margemLucroReal" stackId="a" fill={CHART_COLORS.margem} name="Margem Real" barSize={22}>
+              <Bar dataKey="margemLucroReal" stackId="a" fill={CHART_COLORS.margem} name="Margem Real" barSize={22} radius={[8, 8, 8, 8]}>
                 <LabelList dataKey="margemLucroReal" position="center" formatter={(value: number) => formatPercent(value)} style={{ fill: "#EAE6DF", fontSize: 11, fontFamily: "Inter, sans-serif" }} />
               </Bar>
-              <Bar dataKey="ganhoMargem" stackId="a" fill={CHART_COLORS.accent} name="Ganho de Margem" barSize={22}>
+              <Bar dataKey="ganhoMargem" stackId="a" fill={CHART_COLORS.accent} name="Ganho de Margem" barSize={22} radius={[8, 8, 8, 8]}>
                 <LabelList
                   dataKey="ganhoMargem"
                   position="center"
