@@ -86,12 +86,6 @@ const BENCHMARK_METRICS: Array<{ key: BenchmarkMetric; label: string }> = [
 ];
 
 const DEFAULT_TARGETS: SimulationTargets = {};
-const QUICK_SIMULATION_SCENARIOS = [
-  { categoria: "parcela_debitos", value: "0", label: "Parcelas em 0%" },
-  { categoria: "extras", value: "0", label: "Extras em 0%" },
-  { categoria: "folha_pagamento", value: "14", label: "Folha em 14%" },
-  { categoria: "comissoes", value: "10", label: "Comissoes em 10%" },
-];
 
 type ApiMonthData = {
   receita?: number;
@@ -233,18 +227,29 @@ const Card = ({
   borderColor,
   valueColor,
   subtitle,
+  compact = false,
 }: {
   title: string;
   value: string;
   borderColor: string;
   valueColor?: string;
   subtitle?: string;
+  compact?: boolean;
 }) => (
-  <div className="dashboard-surface dashboard-surface-hover p-[14px] md:p-4 border-t-[2px]" style={{ borderTopColor: borderColor }}>
+  <div
+    className={`dashboard-surface dashboard-surface-hover border-t-[2px] ${compact ? "p-[11px] md:p-[12px]" : "p-[14px] md:p-4"}`}
+    style={{ borderTopColor: borderColor }}
+  >
     <div className="flex items-start justify-between gap-3">
       <div>
         <h3 className="kpi-label text-text/80">{title}</h3>
-        <p className={`kpi-value tabular mt-1.5 leading-none font-semibold ${valueColor || "text-text"}`}>{value}</p>
+        <p
+          className={`tabular mt-1.5 leading-none font-semibold ${valueColor || "text-text"} ${
+            compact ? "text-[16px] md:text-[18px]" : "kpi-value"
+          }`}
+        >
+          {value}
+        </p>
       </div>
     </div>
     {subtitle ? <p className="text-[11px] text-text/48 mt-2">{subtitle}</p> : null}
@@ -393,13 +398,13 @@ export default function DashboardPage() {
   const [agfsSelecionadas, setAgfsSelecionadas] = useState<string[]>([]);
   const [mesesSelecionados, setMesesSelecionados] = useState<number[]>([]);
   const [anosSelecionados, setAnosSelecionados] = useState<number[]>([]);
-  const [categoriasExcluidas, setCategoriasExcluidas] = useState<string[]>([]);
   const [timelineMetric, setTimelineMetric] = useState<TimelineMetric>("resultado");
   const [benchmarkMetric, setBenchmarkMetric] = useState<BenchmarkMetric>("margem");
   const [simulationTargets, setSimulationTargets] = useState<SimulationTargets>(DEFAULT_TARGETS);
   const [targetDraft, setTargetDraft] = useState<{ categoria: string; valor: string }>({ categoria: "", valor: "" });
   const [waterfallMode, setWaterfallMode] = useState<"consolidado" | "agf">("consolidado");
   const [waterfallAgfId, setWaterfallAgfId] = useState<string>("");
+  const categoriasExcluidas: string[] = [];
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -932,13 +937,12 @@ export default function DashboardPage() {
       waterfallBase,
       waterfallOptions,
       matrixRows,
-      agfChartMinWidth: Math.max(660, totaisPorAgf.length * 108),
+      agfChartMinWidth: Math.max(500, totaisPorAgf.length * 82),
     };
   }, [
     agfsSelecionadas,
     mesesSelecionados,
     anosSelecionados,
-    categoriasExcluidas,
     sourceAgfs,
     sourceCategorias,
     sourceDados,
@@ -972,11 +976,6 @@ export default function DashboardPage() {
 
   const handleMultiSelect = (setter: Function, value: any) =>
     setter((previous: any[]) => (previous.includes(value) ? previous.filter((item) => item !== value) : [...previous, value]));
-
-  const setQuickTarget = (categoria: string, value: string) => {
-    setSimulationTargets((previous) => ({ ...previous, [categoria]: value }));
-    setTargetDraft({ categoria, valor: value });
-  };
 
   const applySimulationTarget = () => {
     const categoria = targetDraft.categoria;
@@ -1099,9 +1098,9 @@ export default function DashboardPage() {
             </div>
           ) : (
             dadosProcessados.alertas.slice(0, 8).map((alerta, index) => (
-              <div key={`${alerta.agf}-${index}`} className="dashboard-surface p-[10px]">
+              <div key={`${alerta.agf}-${index}`} className="dashboard-surface alert-surface p-[11px] transition-all duration-150">
                 <div className="flex items-start justify-between gap-3 mb-2">
-                  <h3 className="font-semibold text-[12px]">{alerta.titulo}</h3>
+                  <h3 className="alert-title font-semibold text-[13px] tracking-[0.025em] leading-[1.25] text-text">{alerta.titulo}</h3>
                   <AlertBadge level={alerta.level} />
                 </div>
                 <p className="text-[11px] leading-[1.4] text-text/70 mb-1">{alerta.detalhe}</p>
@@ -1210,7 +1209,7 @@ export default function DashboardPage() {
           <ChartContainer
             title="Benchmark vs Grupo"
             className="h-[270px]"
-            chartMinWidth={dadosProcessados.agfChartMinWidth}
+            chartMinWidth={Math.max(420, dadosProcessados.benchmarkRows.length * 66)}
             actions={
               <SegmentedControl<BenchmarkMetric>
                 items={BENCHMARK_METRICS}
@@ -1219,7 +1218,7 @@ export default function DashboardPage() {
               />
             }
           >
-            <BarChart data={dadosProcessados.benchmarkRows} layout="vertical" margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
+            <BarChart data={dadosProcessados.benchmarkRows} layout="vertical" margin={{ top: 10, right: 14, left: 4, bottom: 4 }} barCategoryGap="9%">
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis
                 type="number"
@@ -1227,8 +1226,12 @@ export default function DashboardPage() {
                 tickFormatter={(value) => `${Number(value).toFixed(1)} pp`}
                 tickLine={false}
                 axisLine={{ stroke: "rgba(180,160,100,0.12)" }}
+                domain={[
+                  (dataMin: number) => Math.min(dataMin - 1.5, 0),
+                  (dataMax: number) => Math.max(dataMax + 1.5, 0),
+                ]}
               />
-              <YAxis type="category" dataKey="nome" width={140} tick={tickStyle} tickLine={false} axisLine={false} />
+              <YAxis type="category" dataKey="nome" width={118} tick={tickStyle} tickLine={false} axisLine={false} />
               <ReferenceLine x={0} stroke="rgba(255,255,255,0.15)" strokeDasharray="4 4" />
               <Tooltip
                 content={
@@ -1237,7 +1240,7 @@ export default function DashboardPage() {
                   />
                 }
               />
-              <Bar dataKey="gap" name="Gap vs mediana" barSize={16} radius={[3, 3, 3, 3]}>
+              <Bar dataKey="gap" name="Gap vs mediana" barSize={14} radius={[4, 4, 4, 4]}>
                 {dadosProcessados.benchmarkRows.map((item) => (
                   <Cell key={item.nome} fill={item.fill} />
                 ))}
@@ -1254,45 +1257,45 @@ export default function DashboardPage() {
 
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           <ChartContainer title="Comparativo de Receita" className="h-[255px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
-            <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 20, left: -20, bottom: 5 }}>
+            <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 12, left: -18, bottom: 5 }} barCategoryGap="8%">
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis dataKey="nome" interval={0} angle={-24} textAnchor="end" height={64} tickMargin={8} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
+              <XAxis dataKey="nome" interval={0} angle={-22} textAnchor="end" height={58} tickMargin={6} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
               <YAxis hide />
               <Tooltip content={<CustomTooltip formatter={formatCurrency} />} />
-              <Bar dataKey="receita" fill={CHART_COLORS.receita} name="Receita" barSize={22} radius={[4, 4, 0, 0]}>
+              <Bar dataKey="receita" fill={CHART_COLORS.receita} name="Receita" barSize={30} radius={[4, 4, 0, 0]}>
                 <LabelList dataKey="receita" position="top" formatter={(value: number) => formatCompact(value)} style={{ fill: "#EAE6DF", fontSize: 10, fontFamily: "Inter, sans-serif" }} />
               </Bar>
             </BarChart>
           </ChartContainer>
           <ChartContainer title="Comparativo de Despesa" className="h-[255px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
-            <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 20, left: -20, bottom: 5 }}>
+            <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 12, left: -18, bottom: 5 }} barCategoryGap="8%">
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis dataKey="nome" interval={0} angle={-24} textAnchor="end" height={64} tickMargin={8} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
+              <XAxis dataKey="nome" interval={0} angle={-22} textAnchor="end" height={58} tickMargin={6} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
               <YAxis hide />
               <Tooltip content={<CustomTooltip formatter={formatCurrency} />} />
-              <Bar dataKey="despesaTotal" fill={CHART_COLORS.despesa} name="Despesa" barSize={22} radius={[4, 4, 0, 0]}>
+              <Bar dataKey="despesaTotal" fill={CHART_COLORS.despesa} name="Despesa" barSize={30} radius={[4, 4, 0, 0]}>
                 <LabelList dataKey="despesaTotal" position="top" formatter={(value: number) => formatCompact(value)} style={{ fill: "#EAE6DF", fontSize: 10, fontFamily: "Inter, sans-serif" }} />
               </Bar>
             </BarChart>
           </ChartContainer>
           <ChartContainer title="Comparativo de Resultado" className="h-[255px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
-            <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 20, left: -20, bottom: 5 }}>
+            <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 12, left: -18, bottom: 5 }} barCategoryGap="8%">
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis dataKey="nome" interval={0} angle={-24} textAnchor="end" height={64} tickMargin={8} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
+              <XAxis dataKey="nome" interval={0} angle={-22} textAnchor="end" height={58} tickMargin={6} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
               <YAxis hide />
               <Tooltip content={<CustomTooltip formatter={formatCurrency} />} />
-              <Bar dataKey="resultado" fill={CHART_COLORS.resultado} name="Resultado" barSize={22} radius={[4, 4, 0, 0]}>
+              <Bar dataKey="resultado" fill={CHART_COLORS.resultado} name="Resultado" barSize={30} radius={[4, 4, 0, 0]}>
                 <LabelList dataKey="resultado" position="top" formatter={(value: number) => formatCompact(value)} style={{ fill: "#EAE6DF", fontSize: 10, fontFamily: "Inter, sans-serif" }} />
               </Bar>
             </BarChart>
           </ChartContainer>
           <ChartContainer title="Comparativo de Margem de Lucro (%)" className="h-[255px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
-            <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 20, left: -20, bottom: 5 }}>
+            <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 12, left: -18, bottom: 5 }} barCategoryGap="8%">
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis dataKey="nome" interval={0} angle={-24} textAnchor="end" height={64} tickMargin={8} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
+              <XAxis dataKey="nome" interval={0} angle={-22} textAnchor="end" height={58} tickMargin={6} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
               <YAxis hide />
               <Tooltip content={<CustomTooltip formatter={formatPercent} />} />
-              <Bar dataKey="margemLucro" fill={CHART_COLORS.margem} name="Margem" barSize={22} radius={[4, 4, 0, 0]}>
+              <Bar dataKey="margemLucro" fill={CHART_COLORS.margem} name="Margem" barSize={30} radius={[4, 4, 0, 0]}>
                 <LabelList dataKey="margemLucro" position="top" formatter={(value: number) => formatPercent(value)} style={{ fill: "#EAE6DF", fontSize: 10, fontFamily: "Inter, sans-serif" }} />
               </Bar>
             </BarChart>
@@ -1522,15 +1525,8 @@ export default function DashboardPage() {
                       <td className="py-[7px] px-[10px] whitespace-nowrap">{item.nome}</td>
                       {sourceCategorias.map((categoria) => {
                         const percentual = item.despesasPercentuais[categoria] || 0;
-                        const intensidade = Math.min(percentual / 30, 1);
-                        const backgroundColor =
-                          intensidade >= 0.66
-                            ? "rgba(217,95,110,0.7)"
-                            : intensidade >= 0.33
-                              ? "rgba(196,155,82,0.5)"
-                              : percentual > 0
-                                ? "rgba(94,127,196,0.25)"
-                                : "rgba(3,9,96,0.55)";
+                        const intensidade = Math.min(percentual / 35, 1);
+                        const backgroundColor = percentual > 0 ? `rgba(217,95,110,${(0.12 + intensidade * 0.56).toFixed(3)})` : "rgba(15,17,34,0.92)";
 
                         return (
                           <td
@@ -1561,44 +1557,27 @@ export default function DashboardPage() {
               <h3 className="font-display italic font-normal text-[1.03rem] text-text">Simulacao de Margem de Lucro</h3>
               <p className="text-[12px] text-text/70 mt-1">Teste metas por categoria e veja o impacto direto na margem.</p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-[280px]">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 min-w-[240px] max-w-[520px]">
               <Card
                 title="Resultado Simulado"
                 value={formatCurrency(dadosProcessados.totaisGerais.resultadoSimulado)}
                 borderColor={CHART_COLORS.margem}
                 valueColor="text-text"
+                compact
               />
               <Card
                 title="Impacto Potencial"
                 value={formatCurrency(dadosProcessados.totaisGerais.impactoSimulado)}
                 borderColor={CHART_COLORS.warning}
                 valueColor="text-warning"
+                compact
               />
             </div>
           </div>
 
           <div className="mb-4">
-            <p className="text-[12px] text-text/80 mb-2">Selecione despesas para excluir do calculo:</p>
-            <div className="flex flex-wrap gap-2">
-              {sourceCategorias.map((categoria) => (
-                <button
-                  key={categoria}
-                  onClick={() => handleMultiSelect(setCategoriasExcluidas, categoria)}
-                  className={`px-3 py-[4px] text-[11px] rounded-[16px] transition-colors ${
-                    categoriasExcluidas.includes(categoria)
-                      ? "bg-primary text-[color:var(--text-on-accent)]"
-                      : "bg-[var(--bg-elevated)] border border-[color:var(--border-subtle)] text-text/80 hover:border-[color:var(--border-medium)]"
-                  }`}
-                >
-                  {CATEGORY_LABELS[categoria] || categoria}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="mb-4">
             <div className="flex items-center justify-between gap-3 mb-2">
-              <p className="text-[12px] text-text/80">Cenarios consultivos rapidos:</p>
+              <p className="text-[12px] text-text/80">Meta por categoria (% da receita):</p>
               <button
                 onClick={clearSimulationTargets}
                 className="text-[11px] font-semibold text-text/60 hover:text-text transition-colors"
@@ -1606,25 +1585,6 @@ export default function DashboardPage() {
                 Limpar metas
               </button>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {QUICK_SIMULATION_SCENARIOS.map((scenarioButton) => (
-                <button
-                  key={`${scenarioButton.categoria}-${scenarioButton.value}`}
-                  onClick={() => setQuickTarget(scenarioButton.categoria, scenarioButton.value)}
-                  className={`px-3 py-[4px] text-[11px] rounded-[16px] transition-colors ${
-                    simulationTargets[scenarioButton.categoria] === scenarioButton.value
-                      ? "bg-primary text-[color:var(--text-on-accent)]"
-                      : "bg-[var(--bg-elevated)] border border-[color:var(--border-subtle)] text-text/80 hover:border-[color:var(--border-medium)]"
-                  }`}
-                >
-                  {scenarioButton.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="mb-4">
-            <p className="text-[12px] text-text/80 mb-2">Meta por categoria (% da receita):</p>
             <div className="grid grid-cols-1 lg:grid-cols-[minmax(220px,260px)_minmax(140px,180px)_auto] gap-3 items-end">
               <label className="text-[12px]">
                 <span className="block text-text/70 mb-2">Categoria</span>
@@ -1689,7 +1649,7 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <ChartContainer title="" className="h-[290px]" chartMinWidth={Math.max(700, dadosProcessados.totaisPorAgf.length * 92)}>
+          <ChartContainer title="" className="h-[290px]" chartMinWidth={Math.max(620, dadosProcessados.totaisPorAgf.length * 84)}>
             <BarChart data={dadosProcessados.totaisPorAgf} layout="vertical" margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis type="number" domain={[-100, 100]} tickFormatter={formatPercent} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
@@ -1699,7 +1659,7 @@ export default function DashboardPage() {
               <Bar dataKey="margemLucroReal" stackId="a" fill={CHART_COLORS.margem} name="Margem Real" barSize={22}>
                 <LabelList dataKey="margemLucroReal" position="center" formatter={(value: number) => formatPercent(value)} style={{ fill: "#EAE6DF", fontSize: 11, fontFamily: "Inter, sans-serif" }} />
               </Bar>
-              <Bar dataKey="ganhoMargem" stackId="a" fill={CHART_COLORS.warning} name="Ganho de Margem" barSize={22}>
+              <Bar dataKey="ganhoMargem" stackId="a" fill={CHART_COLORS.accent} name="Ganho de Margem" barSize={22}>
                 <LabelList
                   dataKey="ganhoMargem"
                   position="center"
