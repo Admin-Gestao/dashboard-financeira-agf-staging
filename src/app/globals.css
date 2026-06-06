@@ -99,6 +99,18 @@
     border: 1px solid rgba(180, 160, 100, 0.08);
   }
 
+  .filter-control-surface {
+    background: linear-gradient(180deg, rgba(31, 31, 60, 0.78), rgba(31, 31, 60, 0.82));
+    border: 1px solid rgba(180, 160, 100, 0.12);
+    backdrop-filter: blur(14px);
+  }
+
+  .filter-popover-surface {
+    background: linear-gradient(180deg, rgba(31, 31, 60, 0.94), rgba(31, 31, 60, 0.96));
+    border: 1px solid rgba(180, 160, 100, 0.16);
+    backdrop-filter: blur(18px);
+  }
+
   .dashboard-surface-hover:hover {
     border-color: rgba(180, 160, 100, 0.22);
     box-shadow: 0 16px 42px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(180, 160, 100, 0.1);
