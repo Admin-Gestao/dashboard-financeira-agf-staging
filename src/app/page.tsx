@@ -68,6 +68,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   telefone: "Telefone",
   veiculos: "Veiculos",
   folha_pagamento: "Folha",
+  outras_despesas: "Outras despesas",
 };
 
 const TIMELINE_METRICS: Array<{ key: TimelineMetric; label: string }> = [
@@ -219,6 +220,11 @@ function normalizeForCompare(value: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .trim()
     .toUpperCase();
+}
+
+function average(values: number[]) {
+  if (values.length === 0) return 0;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
 const Card = ({
@@ -453,6 +459,8 @@ export default function DashboardPage() {
   const [benchmarkMetric, setBenchmarkMetric] = useState<BenchmarkMetric>("margem");
   const [simulationTargets, setSimulationTargets] = useState<SimulationTargets>(DEFAULT_TARGETS);
   const [targetDraft, setTargetDraft] = useState<{ categoria: string; valor: string }>({ categoria: "", valor: "" });
+  const [heatmapAgfsSelecionadas, setHeatmapAgfsSelecionadas] = useState<string[]>([]);
+  const [simulationAgfsSelecionadas, setSimulationAgfsSelecionadas] = useState<string[]>([]);
   const [waterfallMode, setWaterfallMode] = useState<"consolidado" | "agf">("consolidado");
   const [waterfallAgfId, setWaterfallAgfId] = useState<string>("");
   const categoriasExcluidas: string[] = [];
@@ -504,6 +512,10 @@ export default function DashboardPage() {
   const sourceAgfs = sourceData.agfs || [];
   const sourceCategorias = sourceData.categoriasDespesa || [];
   const sourceDados = sourceData.dados || {};
+  const categoriasComOutras = useMemo(
+    () => Array.from(new Set([...sourceCategorias, "outras_despesas"])),
+    [sourceCategorias]
+  );
 
   const anosDisponiveis = useMemo(() => {
     return Object.keys(sourceDados)
@@ -528,6 +540,7 @@ export default function DashboardPage() {
     const mesesOrdenados =
       mesesSelecionados.length > 0 ? [...mesesSelecionados].sort((a, b) => a - b) : mesesDisponiveis.length > 0 ? mesesDisponiveis : ALL_MONTHS;
     const agfsFiltradas = sourceAgfs.filter((agf) => agfIdsSelecionadas.includes(agf.id));
+    const categoriasAnaliticas = categoriasComOutras;
 
     const periodos = anosSelecionadosOrdenados.flatMap((ano) =>
       mesesOrdenados.map((mes) => ({
@@ -609,10 +622,15 @@ export default function DashboardPage() {
       const margemLucro = ratio(resultado, receita);
       const totalSubcontas = sourceCategorias.reduce((sum, categoria) => sum + Number(despesasDetalhadas[categoria] || 0), 0);
       const ajusteSubcontas = despesaTotal - totalSubcontas;
+      const outrasDespesas = Math.max(0, ajusteSubcontas);
       const folhaValor = Number(despesasDetalhadas.folha_pagamento || 0);
       const aluguelValor = Number(despesasDetalhadas.aluguel || 0);
       const extrasValor = Number(despesasDetalhadas.extras || 0);
       const parcelasValor = Number(despesasDetalhadas.parcela_debitos || 0);
+      const despesasDetalhadasComOutras = {
+        ...despesasDetalhadas,
+        outras_despesas: outrasDespesas,
+      };
       const latestWithData = [...series].reverse().find((item) => item.receita || item.despesaTotal || item.objetos);
       const previousWithData = [...series]
         .reverse()
@@ -650,7 +668,7 @@ export default function DashboardPage() {
         const targetPercent = safeNumber(String(targetValue).replace(",", "."));
         if (!Number.isFinite(targetPercent) || targetPercent < 0) return sum;
 
-        const categoriaAtual = safeNumber(despesasDetalhadas[categoria] || 0);
+        const categoriaAtual = safeNumber(despesasDetalhadasComOutras[categoria] || 0);
         const metaFinanceira = receita * (targetPercent / 100);
         return sum + Math.max(0, categoriaAtual - metaFinanceira);
       }, 0);
@@ -668,9 +686,9 @@ export default function DashboardPage() {
         margemLucro,
         objetos,
         folhaSemDescricao,
-        despesasDetalhadas,
+        despesasDetalhadas: despesasDetalhadasComOutras,
         despesasPercentuais: Object.fromEntries(
-          sourceCategorias.map((categoria) => [categoria, ratio(Number(despesasDetalhadas[categoria] || 0), receita)])
+          categoriasAnaliticas.map((categoria) => [categoria, ratio(Number(despesasDetalhadasComOutras[categoria] || 0), receita)])
         ) as Record<string, number>,
         receitaPorPeriodo: series,
         variacaoReceita,
@@ -973,6 +991,37 @@ export default function DashboardPage() {
       };
     });
 
+    const heatmapRows = totaisPorAgf.filter(
+      (item) => heatmapAgfsSelecionadas.length === 0 || heatmapAgfsSelecionadas.includes(item.id)
+    );
+
+    const simulationRowsBase = [...totaisPorAgf].sort(
+      (a, b) => (b.margemLucro + b.ganhoMargem) - (a.margemLucro + a.ganhoMargem)
+    );
+    const simulationRows = simulationRowsBase.filter(
+      (item) => simulationAgfsSelecionadas.length === 0 || simulationAgfsSelecionadas.includes(item.id)
+    );
+    const simulationRowsForAverage = simulationRows.length > 0 ? simulationRows : simulationRowsBase;
+    const simulationCategoryAveragePct =
+      targetDraft.categoria && simulationRowsForAverage.length > 0
+        ? average(
+            simulationRowsForAverage.map((item) =>
+              Number(item.despesasPercentuais[targetDraft.categoria] || 0)
+            )
+          )
+        : 0;
+
+    const simulationTargetInput = String(targetDraft.valor || "").trim().replace(",", ".");
+    const simulationTargetPercent = safeNumber(simulationTargetInput);
+    const simulationNeededSavings =
+      targetDraft.categoria && simulationTargetInput !== "" && Number.isFinite(simulationTargetPercent) && simulationTargetPercent >= 0
+        ? simulationRowsForAverage.reduce((sum, item) => {
+            const categoriaAtual = safeNumber(item.despesasDetalhadas[targetDraft.categoria] || 0);
+            const metaFinanceira = item.receita * (simulationTargetPercent / 100);
+            return sum + Math.max(0, categoriaAtual - metaFinanceira);
+          }, 0)
+        : 0;
+
     return {
       periodosConsolidados,
       totaisPorAgf,
@@ -988,9 +1037,11 @@ export default function DashboardPage() {
       waterfallBase,
       waterfallOptions,
       matrixRows,
-      simulationRows: [...totaisPorAgf].sort(
-        (a, b) => (b.margemLucro + b.ganhoMargem) - (a.margemLucro + a.ganhoMargem)
-      ),
+      heatmapRows,
+      heatmapCategorias: categoriasAnaliticas,
+      simulationRows,
+      simulationCategoryAveragePct,
+      simulationNeededSavings,
       agfChartMinWidth: Math.max(500, totaisPorAgf.length * 82),
     };
   }, [
@@ -1005,8 +1056,13 @@ export default function DashboardPage() {
     timelineMetric,
     benchmarkMetric,
     simulationTargets,
+    heatmapAgfsSelecionadas,
+    simulationAgfsSelecionadas,
+    targetDraft.categoria,
+    targetDraft.valor,
     waterfallMode,
     waterfallAgfId,
+    categoriasComOutras,
   ]);
 
   useEffect(() => {
@@ -1021,12 +1077,12 @@ export default function DashboardPage() {
   }, [agfsSelecionadas, dadosProcessados.waterfallOptions, waterfallAgfId]);
 
   useEffect(() => {
-    if (sourceCategorias.length === 0) return;
-    if (!targetDraft.categoria || !sourceCategorias.includes(targetDraft.categoria)) {
-      const nextCategoria = sourceCategorias[0];
+    if (categoriasComOutras.length === 0) return;
+    if (!targetDraft.categoria || !categoriasComOutras.includes(targetDraft.categoria)) {
+      const nextCategoria = categoriasComOutras[0];
       setTargetDraft({ categoria: nextCategoria, valor: simulationTargets[nextCategoria] ?? "" });
     }
-  }, [sourceCategorias, targetDraft.categoria, simulationTargets]);
+  }, [categoriasComOutras, targetDraft.categoria, simulationTargets]);
 
   const handleMultiSelect = (setter: Function, value: any) =>
     setter((previous: any[]) => (previous.includes(value) ? previous.filter((item) => item !== value) : [...previous, value]));
@@ -1062,6 +1118,27 @@ export default function DashboardPage() {
   };
 
   const tickStyle = { fontFamily: "Inter, sans-serif", fill: "#4A5878", opacity: 1, fontSize: 10 };
+  const renderDualMetricLabel =
+    (percentKey: string) =>
+    ({ x, y, width, height, value, payload }: any) => {
+      if (![x, y, width, height].every((item) => Number.isFinite(item))) return null;
+
+      const numericValue = Number(value ?? 0);
+      const percentValue = Number(payload?.[percentKey] ?? 0);
+      const centerX = x + width / 2;
+      const baseY = numericValue >= 0 ? y - 9 : y + height + 13;
+
+      return (
+        <text x={centerX} y={baseY} textAnchor="middle" fontFamily="Inter, sans-serif">
+          <tspan x={centerX} dy="0" fill="#EAE6DF" fontSize="10" fontWeight={600}>
+            {formatCompact(numericValue)}
+          </tspan>
+          <tspan x={centerX} dy="11" fill="rgba(234,230,223,0.72)" fontSize="9">
+            {formatPercent(percentValue)}
+          </tspan>
+        </text>
+      );
+    };
 
   const timelineFormatter = timelineMetric === "margem" ? formatPercent : formatCurrency;
 
@@ -1398,7 +1475,7 @@ export default function DashboardPage() {
                 {dadosProcessados.totaisPorAgf.map((item) => (
                   <Cell key={item.id} fill={item.resultado >= 0 ? CHART_COLORS.resultado : CHART_COLORS.despesa} />
                 ))}
-                <LabelList dataKey="resultado" position="top" offset={10} formatter={(value: number) => formatCompact(value)} style={{ fill: "#EAE6DF", fontSize: 10, fontFamily: "Inter, sans-serif" }} />
+                <LabelList dataKey="resultado" content={renderDualMetricLabel("margemLucro")} />
               </Bar>
             </BarChart>
           </ChartContainer>
@@ -1423,13 +1500,7 @@ export default function DashboardPage() {
               <YAxis tickFormatter={formatCompact} tick={tickStyle} tickLine={false} axisLine={false} />
               <Tooltip content={<CustomTooltip formatter={formatCurrency} />} cursor={{ fill: "rgba(166,124,58,0.05)" }} />
               <Bar dataKey="despesasDetalhadas.folha_pagamento" fill={CHART_COLORS.folha} name="Folha de Pagamento" barSize={22} radius={[6, 6, 0, 0]} activeBar={{ fill: "#8aa0de" }}>
-                <LabelList
-                  dataKey="despesasDetalhadas.folha_pagamento"
-                  position="top"
-                  offset={10}
-                  formatter={(value: number) => formatCompact(value)}
-                  style={{ fill: "#EAE6DF", fontSize: 10, fontFamily: "Inter, sans-serif" }}
-                />
+                <LabelList dataKey="despesasDetalhadas.folha_pagamento" content={renderDualMetricLabel("folhaReceitaPct")} />
               </Bar>
             </BarChart>
           </ChartContainer>
@@ -1620,15 +1691,25 @@ export default function DashboardPage() {
 
           <div className="dashboard-surface p-3.5 md:p-4 lg:col-span-2">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-display italic font-normal text-[1.03rem] text-text">Despesas por categoria</h3>
-              <span className="text-xs text-text/60">Heatmap por peso da despesa sobre a receita</span>
+              <div className="flex items-center gap-3">
+                <h3 className="font-display italic font-normal text-[1.03rem] text-text">Despesas por categoria</h3>
+                <span className="text-xs text-text/60">Heatmap por peso da despesa sobre a receita</span>
+              </div>
+              <div className="w-full max-w-[250px]">
+                <MultiSelectFilter
+                  name="AGFs do heatmap"
+                  options={sourceAgfs}
+                  selected={heatmapAgfsSelecionadas}
+                  onSelect={(id) => handleMultiSelect(setHeatmapAgfsSelecionadas, id)}
+                />
+              </div>
             </div>
             <div className="overflow-x-auto">
-              <table className="min-w-[1280px] w-full text-[12px]">
+              <table className="min-w-[1420px] w-full text-[12px]">
                 <thead>
                   <tr className="text-left text-text/70 border-b border-white/10">
                     <th className="py-[6px] px-[10px] whitespace-nowrap text-[10px] uppercase tracking-[0.1em] text-text/55">AGF</th>
-                    {sourceCategorias.map((categoria) => (
+                    {dadosProcessados.heatmapCategorias.map((categoria) => (
                       <th key={categoria} className="py-[6px] px-[10px] text-center whitespace-nowrap text-[10px] uppercase tracking-[0.1em] text-text/55">
                         {CATEGORY_LABELS[categoria] || categoria}
                       </th>
@@ -1636,10 +1717,10 @@ export default function DashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {dadosProcessados.totaisPorAgf.map((item) => (
+                  {dadosProcessados.heatmapRows.map((item) => (
                     <tr key={item.id} className="border-b border-white/5">
                       <td className="py-[7px] px-[10px] whitespace-nowrap">{item.nome}</td>
-                      {sourceCategorias.map((categoria) => {
+                      {dadosProcessados.heatmapCategorias.map((categoria) => {
                         const percentual = item.despesasPercentuais[categoria] || 0;
                         const intensidade = Math.min(percentual / 35, 1);
                         const backgroundColor = percentual > 0 ? `rgba(217,95,110,${(0.12 + intensidade * 0.56).toFixed(3)})` : "rgba(15,17,34,0.92)";
@@ -1688,6 +1769,13 @@ export default function DashboardPage() {
                 valueColor="text-warning"
                 compact
               />
+              <Card
+                title="Reducao Necessaria"
+                value={formatCurrency(dadosProcessados.simulationNeededSavings)}
+                borderColor={CHART_COLORS.receita}
+                valueColor="text-info"
+                compact
+              />
             </div>
           </div>
 
@@ -1701,7 +1789,15 @@ export default function DashboardPage() {
                 Limpar metas
               </button>
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-[minmax(220px,260px)_minmax(140px,180px)_auto] gap-3 items-end">
+            <div className="mb-3 max-w-[250px]">
+              <MultiSelectFilter
+                name="AGFs da simulacao"
+                options={sourceAgfs}
+                selected={simulationAgfsSelecionadas}
+                onSelect={(id) => handleMultiSelect(setSimulationAgfsSelecionadas, id)}
+              />
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(220px,240px)_minmax(130px,150px)_minmax(140px,180px)_auto] gap-3 items-end">
               <label className="text-[12px]">
                 <span className="block text-text/70 mb-2">Categoria</span>
                 <select
@@ -1714,12 +1810,24 @@ export default function DashboardPage() {
                   }
                   className="w-full px-[10px] py-[7px] text-[12px] h-[34px]"
                 >
-                  {sourceCategorias.map((categoria) => (
+                  {categoriasComOutras.map((categoria) => (
                     <option key={categoria} value={categoria}>
                       {CATEGORY_LABELS[categoria] || categoria}
                     </option>
                   ))}
                 </select>
+              </label>
+              <label className="text-[12px]">
+                <span className="block text-text/70 mb-2">Media (%)</span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={dadosProcessados.simulationCategoryAveragePct ? dadosProcessados.simulationCategoryAveragePct.toFixed(1) : "0.0"}
+                    className="w-full px-[10px] py-[7px] text-[12px] h-[34px] opacity-85"
+                  />
+                  <span className="text-text/60">%</span>
+                </div>
               </label>
               <label className="text-[12px]">
                 <span className="block text-text/70 mb-2">Meta (%)</span>
