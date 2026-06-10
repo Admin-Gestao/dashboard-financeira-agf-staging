@@ -351,6 +351,46 @@ const CustomTooltip = ({ active, payload, label, formatter }: any) => {
   );
 };
 
+const MetricComparisonTooltip = ({
+  active,
+  payload,
+  label,
+  valueLabel,
+  valueFormatter,
+  percentLabel,
+  percentKey,
+}: {
+  active?: boolean;
+  payload?: any[];
+  label?: string;
+  valueLabel: string;
+  valueFormatter: (value: number) => string;
+  percentLabel: string;
+  percentKey: string;
+}) => {
+  if (!active || !payload?.length) return null;
+
+  const point = payload[0];
+  const entry = point?.payload || {};
+  const mainValue = Number(point?.value ?? 0);
+  const percentValue = Number(entry?.[percentKey] ?? 0);
+
+  return (
+    <div
+      className="dashboard-muted-surface px-[14px] py-[10px] text-[12px] shadow-[0_4px_16px_rgba(0,0,0,0.5)]"
+      style={{ borderColor: "var(--border-medium)", backgroundColor: "rgba(6,6,11,0.52)" }}
+    >
+      <p className="font-bold mb-1">{label}</p>
+      <p style={{ color: point?.color || point?.fill || point?.stroke }}>
+        {valueLabel}: {valueFormatter(mainValue)}
+      </p>
+      <p className="text-[#9FB0D9]">
+        {percentLabel}: {formatPercent(percentValue)}
+      </p>
+    </div>
+  );
+};
+
 const PremiumTimelineTooltip = ({
   active,
   payload,
@@ -703,6 +743,7 @@ export default function DashboardPage() {
         aluguelReceitaPct: ratio(aluguelValor, receita),
         extrasReceitaPct: ratio(extrasValor, receita),
         parcelasReceitaPct: ratio(parcelasValor, receita),
+        resultadoReceitaPct: ratio(resultado, receita),
         margemLucroReal: margemLucro,
         margemLucroSimulada: margemSimulada,
         ganhoMargem: categoriasExcluidas.length > 0 || Object.values(simulationTargets).some((value) => String(value || "").trim() !== "")
@@ -1119,22 +1160,24 @@ export default function DashboardPage() {
 
   const tickStyle = { fontFamily: "Inter, sans-serif", fill: "#4A5878", opacity: 1, fontSize: 10 };
   const renderDualMetricLabel =
-    (percentKey: string) =>
-    ({ x, y, width, height, value, payload }: any) => {
+    (rows: any[], percentKey: string, percentColor = "#9FB0D9") =>
+    ({ x, y, width, height, value, payload, index }: any) => {
       if (![x, y, width, height].every((item) => Number.isFinite(item))) return null;
 
       const numericValue = Number(value ?? 0);
-      const percentValue = Number(payload?.[percentKey] ?? 0);
+      const entry = rows[index] || payload || {};
+      const percentValue = Number(entry?.[percentKey] ?? 0);
       const centerX = x + width / 2;
-      const baseY = numericValue >= 0 ? y - 9 : y + height + 13;
+      const currencyY = numericValue >= 0 ? y - 6 : y + height + 12;
+      const percentY = numericValue >= 0 ? currencyY - 11 : currencyY + 11;
 
       return (
-        <text x={centerX} y={baseY} textAnchor="middle" fontFamily="Inter, sans-serif">
-          <tspan x={centerX} dy="0" fill="#EAE6DF" fontSize="10" fontWeight={600}>
-            {formatCompact(numericValue)}
-          </tspan>
-          <tspan x={centerX} dy="11" fill="rgba(234,230,223,0.72)" fontSize="9">
+        <text x={centerX} y={currencyY} textAnchor="middle" fontFamily="Inter, sans-serif">
+          <tspan x={centerX} y={percentY} fill={percentColor} fontSize="9" fontWeight={600}>
             {formatPercent(percentValue)}
+          </tspan>
+          <tspan x={centerX} y={currencyY} fill="#EAE6DF" fontSize="10" fontWeight={600}>
+            {formatCompact(numericValue)}
           </tspan>
         </text>
       );
@@ -1403,7 +1446,7 @@ export default function DashboardPage() {
               />
             }
           >
-            <BarChart data={dadosProcessados.benchmarkRows} layout="vertical" margin={{ top: 10, right: 18, left: 4, bottom: 4 }} barCategoryGap="11%">
+            <BarChart data={dadosProcessados.benchmarkRows} layout="vertical" margin={{ top: 10, right: 22, left: 20, bottom: 4 }} barCategoryGap="11%">
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis
                 type="number"
@@ -1412,11 +1455,11 @@ export default function DashboardPage() {
                 tickLine={false}
                 axisLine={{ stroke: "rgba(180,160,100,0.12)" }}
                 domain={[
-                  (dataMin: number) => Math.min(dataMin - 1.5, 0),
-                  (dataMax: number) => Math.max(dataMax + 1.5, 0),
+                  (dataMin: number) => Math.min(dataMin - 4, 0),
+                  (dataMax: number) => Math.max(dataMax + 4, 0),
                 ]}
               />
-              <YAxis type="category" dataKey="nome" width={156} tickMargin={28} tick={tickStyle} tickLine={false} axisLine={false} />
+              <YAxis type="category" dataKey="nome" width={188} tickMargin={36} tick={tickStyle} tickLine={false} axisLine={false} />
               <ReferenceLine x={0} stroke="rgba(255,255,255,0.15)" strokeDasharray="4 4" />
               <Tooltip
                 cursor={{ fill: "rgba(166,124,58,0.05)" }}
@@ -1433,7 +1476,7 @@ export default function DashboardPage() {
                 <LabelList
                   dataKey="valorAtual"
                   position="right"
-                  offset={12}
+                  offset={18}
                   formatter={(value: number) => formatPercent(Number(value ?? 0))}
                   style={{ fill: "#EAE6DF", fontSize: 11, fontFamily: "Inter, sans-serif" }}
                 />
@@ -1470,12 +1513,22 @@ export default function DashboardPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis dataKey="nome" interval={0} angle={-22} textAnchor="end" height={76} tickMargin={18} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
               <YAxis hide />
-              <Tooltip content={<CustomTooltip formatter={formatCurrency} />} cursor={{ fill: "rgba(166,124,58,0.05)" }} />
+              <Tooltip
+                content={
+                  <MetricComparisonTooltip
+                    valueLabel="Resultado"
+                    valueFormatter={formatCurrency}
+                    percentLabel="Resultado/Receita"
+                    percentKey="resultadoReceitaPct"
+                  />
+                }
+                cursor={{ fill: "rgba(166,124,58,0.05)" }}
+              />
               <Bar dataKey="resultado" name="Resultado" barSize={30} radius={[6, 6, 0, 0]} activeBar>
                 {dadosProcessados.totaisPorAgf.map((item) => (
                   <Cell key={item.id} fill={item.resultado >= 0 ? CHART_COLORS.resultado : CHART_COLORS.despesa} />
                 ))}
-                <LabelList dataKey="resultado" content={renderDualMetricLabel("margemLucro")} />
+                <LabelList dataKey="resultado" content={renderDualMetricLabel(dadosProcessados.totaisPorAgf, "resultadoReceitaPct", "#74D7C0")} />
               </Bar>
             </BarChart>
           </ChartContainer>
@@ -1498,9 +1551,19 @@ export default function DashboardPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis dataKey="nome" interval={0} angle={-24} textAnchor="end" height={78} tickMargin={18} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
               <YAxis tickFormatter={formatCompact} tick={tickStyle} tickLine={false} axisLine={false} />
-              <Tooltip content={<CustomTooltip formatter={formatCurrency} />} cursor={{ fill: "rgba(166,124,58,0.05)" }} />
+              <Tooltip
+                content={
+                  <MetricComparisonTooltip
+                    valueLabel="Folha"
+                    valueFormatter={formatCurrency}
+                    percentLabel="Folha/Receita"
+                    percentKey="folhaReceitaPct"
+                  />
+                }
+                cursor={{ fill: "rgba(166,124,58,0.05)" }}
+              />
               <Bar dataKey="despesasDetalhadas.folha_pagamento" fill={CHART_COLORS.folha} name="Folha de Pagamento" barSize={22} radius={[6, 6, 0, 0]} activeBar={{ fill: "#8aa0de" }}>
-                <LabelList dataKey="despesasDetalhadas.folha_pagamento" content={renderDualMetricLabel("folhaReceitaPct")} />
+                <LabelList dataKey="despesasDetalhadas.folha_pagamento" content={renderDualMetricLabel(dadosProcessados.totaisPorAgf, "folhaReceitaPct", "#AFC1F6")} />
               </Bar>
             </BarChart>
           </ChartContainer>
@@ -1749,12 +1812,12 @@ export default function DashboardPage() {
         </section>
 
         <section className="dashboard-surface p-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between mb-4">
+          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_auto] gap-3 items-start mb-3">
             <div>
               <h3 className="font-display italic font-normal text-[1.03rem] text-text">Simulacao de Margem de Lucro</h3>
               <p className="text-[12px] text-text/70 mt-1">Teste metas por categoria e veja o impacto direto na margem.</p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 min-w-[240px] max-w-[520px]">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 min-w-[240px] max-w-[790px]">
               <Card
                 title="Resultado Simulado"
                 value={formatCurrency(dadosProcessados.totaisGerais.resultadoSimulado)}
@@ -1779,7 +1842,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="mb-4">
+          <div className="mb-3">
             <div className="flex items-center justify-between gap-3 mb-2">
               <p className="text-[12px] text-text/80">Meta por categoria (% da receita):</p>
               <button
