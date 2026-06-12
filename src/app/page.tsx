@@ -23,6 +23,7 @@ import { ChevronDown } from "lucide-react";
 
 type TimelineMetric = "resultado" | "receita" | "despesa" | "margem";
 type BenchmarkMetric = "margem" | "folha" | "aluguel" | "despesa" | "parcelas";
+type SimulationView = "margem" | "resultado";
 
 type SimulationTargets = Partial<Record<string, string>>;
 
@@ -84,6 +85,11 @@ const BENCHMARK_METRICS: Array<{ key: BenchmarkMetric; label: string }> = [
   { key: "aluguel", label: "Aluguel/Rec" },
   { key: "despesa", label: "Despesa/Rec" },
   { key: "parcelas", label: "Parcelas/Rec" },
+];
+
+const SIMULATION_VIEWS: Array<{ key: SimulationView; label: string }> = [
+  { key: "margem", label: "Margem" },
+  { key: "resultado", label: "Resultado" },
 ];
 
 const DEFAULT_TARGETS: SimulationTargets = {};
@@ -496,7 +502,9 @@ export default function DashboardPage() {
   const [mesesSelecionados, setMesesSelecionados] = useState<number[]>([]);
   const [anosSelecionados, setAnosSelecionados] = useState<number[]>([]);
   const [timelineMetric, setTimelineMetric] = useState<TimelineMetric>("resultado");
+  const [timelineExpenseCategory, setTimelineExpenseCategory] = useState<string>("__total__");
   const [benchmarkMetric, setBenchmarkMetric] = useState<BenchmarkMetric>("margem");
+  const [simulationView, setSimulationView] = useState<SimulationView>("margem");
   const [simulationTargets, setSimulationTargets] = useState<SimulationTargets>(DEFAULT_TARGETS);
   const [targetDraft, setTargetDraft] = useState<{ categoria: string; valor: string }>({ categoria: "", valor: "" });
   const [heatmapAgfsSelecionadas, setHeatmapAgfsSelecionadas] = useState<string[]>([]);
@@ -622,7 +630,10 @@ export default function DashboardPage() {
         resultado: receita - despesa,
         margem: ratio(receita - despesa, receita),
         objetos,
-        despesas,
+        despesas: {
+          ...despesas,
+          outras_despesas: Math.max(0, despesa - sourceCategorias.reduce((sum, categoria) => sum + Number(despesas[categoria] || 0), 0)),
+        },
         folhaSemDescricao,
       };
     });
@@ -766,7 +777,9 @@ export default function DashboardPage() {
     const evolucaoTemporal = periodosConsolidados.map((periodo) => ({
       ...periodo,
       valor:
-        timelineMetric === "receita"
+        timelineMetric === "despesa" && timelineExpenseCategory !== "__total__"
+          ? Number(periodo.despesas?.[timelineExpenseCategory] || 0)
+          : timelineMetric === "receita"
           ? periodo.receita
           : timelineMetric === "despesa"
             ? periodo.despesa
@@ -1063,6 +1076,14 @@ export default function DashboardPage() {
           }, 0)
         : 0;
 
+    const simulationScopedTotals = {
+      receita: simulationRows.reduce((sum, item) => sum + item.receita, 0),
+      despesa: simulationRows.reduce((sum, item) => sum + item.despesaTotal, 0),
+      resultado: simulationRows.reduce((sum, item) => sum + item.resultado, 0),
+      resultadoSimulado: simulationRows.reduce((sum, item) => sum + item.resultadoSimulado, 0),
+      impactoSimulado: simulationRows.reduce((sum, item) => sum + item.impactoFinanceiroSimulado, 0),
+    };
+
     return {
       periodosConsolidados,
       totaisPorAgf,
@@ -1081,8 +1102,16 @@ export default function DashboardPage() {
       heatmapRows,
       heatmapCategorias: categoriasAnaliticas,
       simulationRows,
+      simulationScopedTotals,
       simulationCategoryAveragePct,
       simulationNeededSavings,
+      receitaRows: [...totaisPorAgf].sort((a, b) => b.receita - a.receita),
+      despesaRows: [...totaisPorAgf].sort((a, b) => b.despesaTotal - a.despesaTotal),
+      resultadoRows: [...totaisPorAgf].sort((a, b) => b.resultado - a.resultado),
+      margemRows: [...totaisPorAgf].sort((a, b) => b.margemLucro - a.margemLucro),
+      folhaRows: [...totaisPorAgf].sort(
+        (a, b) => Number(b.despesasDetalhadas.folha_pagamento || 0) - Number(a.despesasDetalhadas.folha_pagamento || 0)
+      ),
       agfChartMinWidth: Math.max(500, totaisPorAgf.length * 82),
     };
   }, [
@@ -1095,6 +1124,7 @@ export default function DashboardPage() {
     anosDisponiveis,
     mesesDisponiveis,
     timelineMetric,
+    timelineExpenseCategory,
     benchmarkMetric,
     simulationTargets,
     heatmapAgfsSelecionadas,
@@ -1184,6 +1214,15 @@ export default function DashboardPage() {
     };
 
   const timelineFormatter = timelineMetric === "margem" ? formatPercent : formatCurrency;
+  const timelineDisplayLabel =
+    timelineMetric === "despesa" && timelineExpenseCategory !== "__total__"
+      ? CATEGORY_LABELS[timelineExpenseCategory] || timelineExpenseCategory
+      : TIMELINE_METRICS.find((item) => item.key === timelineMetric)?.label || "Resultado";
+  const timelineTitle = `${timelineDisplayLabel} ao longo do tempo`;
+  const simulationChartRows =
+    simulationView === "resultado"
+      ? [...dadosProcessados.simulationRows].sort((a, b) => b.resultadoSimulado - a.resultadoSimulado)
+      : dadosProcessados.simulationRows;
 
   if (loading) {
     return (
@@ -1286,14 +1325,30 @@ export default function DashboardPage() {
 
         <section>
           <ChartContainer
-            title="Resultado ao longo do tempo"
+            title={timelineTitle}
             className="h-[265px]"
             actions={
-              <SegmentedControl<TimelineMetric>
-                items={TIMELINE_METRICS}
-                value={timelineMetric}
-                onChange={(value) => setTimelineMetric(value)}
-              />
+              <div className="flex flex-wrap items-center gap-2">
+                <SegmentedControl<TimelineMetric>
+                  items={TIMELINE_METRICS}
+                  value={timelineMetric}
+                  onChange={(value) => setTimelineMetric(value)}
+                />
+                {timelineMetric === "despesa" ? (
+                  <select
+                    value={timelineExpenseCategory}
+                    onChange={(event) => setTimelineExpenseCategory(event.target.value)}
+                    className="px-[10px] py-[7px] text-[12px] h-8 min-w-[180px]"
+                  >
+                    <option value="__total__">Despesa total</option>
+                    {categoriasComOutras.map((categoria) => (
+                      <option key={categoria} value={categoria}>
+                        {CATEGORY_LABELS[categoria] || categoria}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+              </div>
             }
           >
             <AreaChart data={dadosProcessados.evolucaoTemporal} margin={{ top: 10, right: 20, left: 12, bottom: 5 }}>
@@ -1368,7 +1423,7 @@ export default function DashboardPage() {
               <Area
                 type="monotone"
                 dataKey="valor"
-                name={TIMELINE_METRICS.find((item) => item.key === timelineMetric)?.label || "Resultado"}
+                name={timelineDisplayLabel}
                 stroke="#A67C3A"
                 strokeWidth={2.4}
                 fill="url(#timelineGradient)"
@@ -1487,7 +1542,7 @@ export default function DashboardPage() {
 
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           <ChartContainer title="Comparativo de Receita" className="h-[255px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
-            <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 12, left: -18, bottom: 5 }} barCategoryGap="8%">
+            <BarChart data={dadosProcessados.receitaRows} margin={{ top: 20, right: 12, left: -18, bottom: 5 }} barCategoryGap="8%">
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis dataKey="nome" interval={0} angle={-22} textAnchor="end" height={76} tickMargin={18} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
               <YAxis hide />
@@ -1498,7 +1553,7 @@ export default function DashboardPage() {
             </BarChart>
           </ChartContainer>
           <ChartContainer title="Comparativo de Despesa" className="h-[255px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
-            <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 12, left: -18, bottom: 5 }} barCategoryGap="8%">
+            <BarChart data={dadosProcessados.despesaRows} margin={{ top: 20, right: 12, left: -18, bottom: 5 }} barCategoryGap="8%">
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis dataKey="nome" interval={0} angle={-22} textAnchor="end" height={76} tickMargin={18} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
               <YAxis hide />
@@ -1509,9 +1564,9 @@ export default function DashboardPage() {
             </BarChart>
           </ChartContainer>
           <ChartContainer title="Comparativo de Resultado" className="h-[255px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
-            <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 12, left: -18, bottom: 5 }} barCategoryGap="8%">
+            <BarChart data={dadosProcessados.resultadoRows} margin={{ top: 16, right: 12, left: -18, bottom: 0 }} barCategoryGap="8%">
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis dataKey="nome" interval={0} angle={-22} textAnchor="end" height={76} tickMargin={18} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
+              <XAxis dataKey="nome" interval={0} angle={-18} textAnchor="end" height={60} tickMargin={10} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
               <YAxis hide />
               <Tooltip
                 content={
@@ -1525,17 +1580,17 @@ export default function DashboardPage() {
                 cursor={{ fill: "rgba(166,124,58,0.05)" }}
               />
               <Bar dataKey="resultado" name="Resultado" barSize={30} radius={[6, 6, 0, 0]} activeBar>
-                {dadosProcessados.totaisPorAgf.map((item) => (
+                {dadosProcessados.resultadoRows.map((item) => (
                   <Cell key={item.id} fill={item.resultado >= 0 ? CHART_COLORS.resultado : CHART_COLORS.despesa} />
                 ))}
-                <LabelList dataKey="resultado" content={renderDualMetricLabel(dadosProcessados.totaisPorAgf, "resultadoReceitaPct", "#74D7C0")} />
+                <LabelList dataKey="resultado" content={renderDualMetricLabel(dadosProcessados.resultadoRows, "resultadoReceitaPct", "#74D7C0")} />
               </Bar>
             </BarChart>
           </ChartContainer>
           <ChartContainer title="Comparativo de Margem de Lucro (%)" className="h-[255px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
-            <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 12, left: -18, bottom: 5 }} barCategoryGap="8%">
+            <BarChart data={dadosProcessados.margemRows} margin={{ top: 16, right: 12, left: -18, bottom: 0 }} barCategoryGap="8%">
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis dataKey="nome" interval={0} angle={-22} textAnchor="end" height={76} tickMargin={18} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
+              <XAxis dataKey="nome" interval={0} angle={-18} textAnchor="end" height={60} tickMargin={10} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
               <YAxis hide />
               <Tooltip content={<CustomTooltip formatter={formatPercent} />} cursor={{ fill: "rgba(166,124,58,0.05)" }} />
               <Bar dataKey="margemLucro" fill={CHART_COLORS.margem} name="Margem" barSize={30} radius={[6, 6, 0, 0]} activeBar={{ fill: "#a78bf2" }}>
@@ -1547,7 +1602,7 @@ export default function DashboardPage() {
 
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           <ChartContainer title="Folha de Pagamento" className="h-[285px]" chartMinWidth={dadosProcessados.agfChartMinWidth}>
-            <BarChart data={dadosProcessados.totaisPorAgf} margin={{ top: 20, right: 20, left: -10, bottom: 5 }}>
+            <BarChart data={dadosProcessados.folhaRows} margin={{ top: 20, right: 20, left: -10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis dataKey="nome" interval={0} angle={-24} textAnchor="end" height={78} tickMargin={18} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
               <YAxis tickFormatter={formatCompact} tick={tickStyle} tickLine={false} axisLine={false} />
@@ -1563,7 +1618,7 @@ export default function DashboardPage() {
                 cursor={{ fill: "rgba(166,124,58,0.05)" }}
               />
               <Bar dataKey="despesasDetalhadas.folha_pagamento" fill={CHART_COLORS.folha} name="Folha de Pagamento" barSize={22} radius={[6, 6, 0, 0]} activeBar={{ fill: "#8aa0de" }}>
-                <LabelList dataKey="despesasDetalhadas.folha_pagamento" content={renderDualMetricLabel(dadosProcessados.totaisPorAgf, "folhaReceitaPct", "#AFC1F6")} />
+                <LabelList dataKey="despesasDetalhadas.folha_pagamento" content={renderDualMetricLabel(dadosProcessados.folhaRows, "folhaReceitaPct", "#AFC1F6")} />
               </Bar>
             </BarChart>
           </ChartContainer>
@@ -1813,21 +1868,114 @@ export default function DashboardPage() {
 
         <section className="dashboard-surface p-4">
           <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_auto] gap-3 items-start mb-3">
-            <div>
+            <div className="space-y-3">
               <h3 className="font-display italic font-normal text-[1.03rem] text-text">Simulacao de Margem de Lucro</h3>
-              <p className="text-[12px] text-text/70 mt-1">Teste metas por categoria e veja o impacto direto na margem.</p>
+              <p className="text-[12px] text-text/70">Teste metas por categoria e veja o impacto direto na margem.</p>
+              <div>
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <p className="text-[12px] text-text/80">Meta por categoria (% da receita):</p>
+                  <button
+                    onClick={clearSimulationTargets}
+                    className="text-[11px] font-semibold text-text/60 hover:text-text transition-colors"
+                  >
+                    Limpar metas
+                  </button>
+                </div>
+                <div className="mb-3 max-w-[250px]">
+                  <MultiSelectFilter
+                    name="AGFs da simulacao"
+                    options={sourceAgfs}
+                    selected={simulationAgfsSelecionadas}
+                    onSelect={(id) => handleMultiSelect(setSimulationAgfsSelecionadas, id)}
+                  />
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-[minmax(220px,240px)_minmax(130px,150px)_minmax(140px,180px)_auto] gap-3 items-end">
+                  <label className="text-[12px]">
+                    <span className="block text-text/70 mb-2">Categoria</span>
+                    <select
+                      value={targetDraft.categoria}
+                      onChange={(event) =>
+                        setTargetDraft({
+                          categoria: event.target.value,
+                          valor: simulationTargets[event.target.value] ?? "",
+                        })
+                      }
+                      className="w-full px-[10px] py-[7px] text-[12px] h-[34px]"
+                    >
+                      {categoriasComOutras.map((categoria) => (
+                        <option key={categoria} value={categoria}>
+                          {CATEGORY_LABELS[categoria] || categoria}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-[12px]">
+                    <span className="block text-text/70 mb-2">Media (%)</span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value={dadosProcessados.simulationCategoryAveragePct ? dadosProcessados.simulationCategoryAveragePct.toFixed(1) : "0.0"}
+                        className="w-full px-[10px] py-[7px] text-[12px] h-[34px] opacity-85"
+                      />
+                      <span className="text-text/60">%</span>
+                    </div>
+                  </label>
+                  <label className="text-[12px]">
+                    <span className="block text-text/70 mb-2">Meta (%)</span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="0.1"
+                        value={targetDraft.valor}
+                        onChange={(event) => setTargetDraft((previous) => ({ ...previous, valor: event.target.value }))}
+                        placeholder="Ex: 14"
+                        className="w-full px-[10px] py-[7px] text-[12px] h-[34px]"
+                      />
+                      <span className="text-text/60">%</span>
+                    </div>
+                  </label>
+                  <button
+                    onClick={applySimulationTarget}
+                    className="h-[34px] min-w-[148px] justify-self-start px-4 rounded-md bg-primary text-[color:var(--text-on-accent)] text-[12px] font-bold hover:opacity-90 transition-opacity"
+                  >
+                    Aplicar meta
+                  </button>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {Object.entries(simulationTargets)
+                    .filter(([, value]) => String(value || "").trim() !== "")
+                    .map(([categoria, value]) => (
+                      <button
+                        key={categoria}
+                        onClick={() => removeSimulationTarget(categoria)}
+                        className="inline-flex items-center gap-2 rounded-[16px] bg-[var(--bg-elevated)] border border-[color:var(--border-subtle)] px-3 py-[4px] text-[11px] text-text/85 hover:border-[color:var(--border-medium)] transition-colors"
+                      >
+                        <span>{CATEGORY_LABELS[categoria] || categoria}</span>
+                        <span className="font-semibold">{safeNumber(value).toFixed(1)}%</span>
+                        <span className="text-text/55">x</span>
+                      </button>
+                    ))}
+                </div>
+                <p className="text-xs text-text/55 mt-3">
+                  A meta e sempre lida como percentual da receita. Exemplo: Folha em 14% significa projetar cada AGF com
+                  folha total equivalente a 14% da receita filtrada.
+                </p>
+              </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 min-w-[240px] max-w-[790px]">
               <Card
                 title="Resultado Simulado"
-                value={formatCurrency(dadosProcessados.totaisGerais.resultadoSimulado)}
+                value={formatCurrency(dadosProcessados.simulationScopedTotals.resultadoSimulado)}
                 borderColor={CHART_COLORS.margem}
                 valueColor="text-text"
                 compact
               />
               <Card
                 title="Impacto Potencial"
-                value={formatCurrency(dadosProcessados.totaisGerais.impactoSimulado)}
+                value={formatCurrency(dadosProcessados.simulationScopedTotals.impactoSimulado)}
                 borderColor={CHART_COLORS.warning}
                 valueColor="text-warning"
                 compact
@@ -1842,118 +1990,74 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="mb-3">
-            <div className="flex items-center justify-between gap-3 mb-2">
-              <p className="text-[12px] text-text/80">Meta por categoria (% da receita):</p>
-              <button
-                onClick={clearSimulationTargets}
-                className="text-[11px] font-semibold text-text/60 hover:text-text transition-colors"
-              >
-                Limpar metas
-              </button>
-            </div>
-            <div className="mb-3 max-w-[250px]">
-              <MultiSelectFilter
-                name="AGFs da simulacao"
-                options={sourceAgfs}
-                selected={simulationAgfsSelecionadas}
-                onSelect={(id) => handleMultiSelect(setSimulationAgfsSelecionadas, id)}
+          <ChartContainer
+            title=""
+            className="h-[290px]"
+            chartMinWidth={Math.max(620, simulationChartRows.length * 84)}
+            actions={
+              <SegmentedControl<SimulationView>
+                items={SIMULATION_VIEWS}
+                value={simulationView}
+                onChange={(value) => setSimulationView(value)}
               />
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-[minmax(220px,240px)_minmax(130px,150px)_minmax(140px,180px)_auto] gap-3 items-end">
-              <label className="text-[12px]">
-                <span className="block text-text/70 mb-2">Categoria</span>
-                <select
-                  value={targetDraft.categoria}
-                  onChange={(event) =>
-                    setTargetDraft({
-                      categoria: event.target.value,
-                      valor: simulationTargets[event.target.value] ?? "",
-                    })
-                  }
-                  className="w-full px-[10px] py-[7px] text-[12px] h-[34px]"
-                >
-                  {categoriasComOutras.map((categoria) => (
-                    <option key={categoria} value={categoria}>
-                      {CATEGORY_LABELS[categoria] || categoria}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-[12px]">
-                <span className="block text-text/70 mb-2">Media (%)</span>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={dadosProcessados.simulationCategoryAveragePct ? dadosProcessados.simulationCategoryAveragePct.toFixed(1) : "0.0"}
-                    className="w-full px-[10px] py-[7px] text-[12px] h-[34px] opacity-85"
-                  />
-                  <span className="text-text/60">%</span>
-                </div>
-              </label>
-              <label className="text-[12px]">
-                <span className="block text-text/70 mb-2">Meta (%)</span>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    min="0"
-                    step="0.1"
-                    value={targetDraft.valor}
-                    onChange={(event) => setTargetDraft((previous) => ({ ...previous, valor: event.target.value }))}
-                    placeholder="Ex: 14"
-                    className="w-full px-[10px] py-[7px] text-[12px] h-[34px]"
-                  />
-                  <span className="text-text/60">%</span>
-                </div>
-              </label>
-              <button
-                onClick={applySimulationTarget}
-                className="h-[34px] min-w-[148px] justify-self-start px-4 rounded-md bg-primary text-[color:var(--text-on-accent)] text-[12px] font-bold hover:opacity-90 transition-opacity"
-              >
-                Aplicar meta
-              </button>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {Object.entries(simulationTargets)
-                .filter(([, value]) => String(value || "").trim() !== "")
-                .map(([categoria, value]) => (
-                  <button
-                    key={categoria}
-                    onClick={() => removeSimulationTarget(categoria)}
-                    className="inline-flex items-center gap-2 rounded-[16px] bg-[var(--bg-elevated)] border border-[color:var(--border-subtle)] px-3 py-[4px] text-[11px] text-text/85 hover:border-[color:var(--border-medium)] transition-colors"
-                  >
-                    <span>{CATEGORY_LABELS[categoria] || categoria}</span>
-                    <span className="font-semibold">{safeNumber(value).toFixed(1)}%</span>
-                    <span className="text-text/55">x</span>
-                  </button>
-                ))}
-            </div>
-            <p className="text-xs text-text/55 mt-3">
-              A meta e sempre lida como percentual da receita. Exemplo: Folha em 14% significa projetar cada AGF com
-              folha total equivalente a 14% da receita filtrada.
-            </p>
-          </div>
-
-          <ChartContainer title="" className="h-[290px]" chartMinWidth={Math.max(620, dadosProcessados.simulationRows.length * 84)}>
-            <BarChart data={dadosProcessados.simulationRows} layout="vertical" margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
+            }
+          >
+            <BarChart data={simulationChartRows} layout="vertical" margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis type="number" domain={[-100, 100]} tickFormatter={formatPercent} tick={tickStyle} tickLine={false} axisLine={{ stroke: "rgba(180,160,100,0.12)" }} />
+              <XAxis
+                type="number"
+                domain={
+                  simulationView === "resultado"
+                    ? [
+                        (dataMin: number) => Math.min(dataMin * 1.15, 0),
+                        (dataMax: number) => Math.max(dataMax * 1.15, 0),
+                      ]
+                    : [-100, 100]
+                }
+                tickFormatter={simulationView === "resultado" ? formatCompact : formatPercent}
+                tick={tickStyle}
+                tickLine={false}
+                axisLine={{ stroke: "rgba(180,160,100,0.12)" }}
+              />
               <YAxis type="category" dataKey="nome" tick={tickStyle} width={156} tickMargin={28} tickLine={false} axisLine={false} />
-              <Tooltip content={<CustomTooltip formatter={formatPercent} />} cursor={{ fill: "rgba(166,124,58,0.05)" }} />
+              <Tooltip content={<CustomTooltip formatter={simulationView === "resultado" ? formatCurrency : formatPercent} />} cursor={{ fill: "rgba(166,124,58,0.05)" }} />
               <Legend wrapperStyle={{ fontFamily: "Inter, sans-serif", fontSize: "11px", color: "#8B9ABF" }} />
-              <Bar dataKey="margemLucroReal" stackId="a" fill={CHART_COLORS.margem} name="Margem Real" barSize={22} radius={[8, 8, 8, 8]}>
-                <LabelList dataKey="margemLucroReal" position="center" formatter={(value: number) => formatPercent(value)} style={{ fill: "#EAE6DF", fontSize: 11, fontFamily: "Inter, sans-serif" }} />
-              </Bar>
-              <Bar dataKey="ganhoMargem" stackId="a" fill={CHART_COLORS.accent} name="Ganho de Margem" barSize={22} radius={[8, 8, 8, 8]}>
-                <LabelList
-                  dataKey="ganhoMargem"
-                  position="center"
-                  formatter={(value: number) => (value > 0 ? `+${Number(value).toFixed(1)}%` : "")}
-                  style={{ fill: "#010326", fontSize: 11, fontWeight: "bold", fontFamily: "Inter, sans-serif" }}
-                />
-              </Bar>
+              {simulationView === "resultado" ? (
+                <>
+                  <Bar dataKey="resultado" fill={CHART_COLORS.receita} name="Resultado Real" barSize={18} radius={[7, 7, 7, 7]} activeBar={{ fill: "#7390d5" }}>
+                    <LabelList
+                      dataKey="resultado"
+                      position="right"
+                      offset={8}
+                      formatter={(value: number) => formatCompact(value)}
+                      style={{ fill: "#EAE6DF", fontSize: 10, fontFamily: "Inter, sans-serif" }}
+                    />
+                  </Bar>
+                  <Bar dataKey="resultadoSimulado" fill={CHART_COLORS.resultado} name="Resultado Simulado" barSize={18} radius={[7, 7, 7, 7]} activeBar={{ fill: "#3bc59d" }}>
+                    <LabelList
+                      dataKey="resultadoSimulado"
+                      position="right"
+                      offset={8}
+                      formatter={(value: number) => formatCompact(value)}
+                      style={{ fill: "#9BE5CF", fontSize: 10, fontFamily: "Inter, sans-serif" }}
+                    />
+                  </Bar>
+                </>
+              ) : (
+                <>
+                  <Bar dataKey="margemLucroReal" stackId="a" fill={CHART_COLORS.margem} name="Margem Real" barSize={22} radius={[8, 8, 8, 8]}>
+                    <LabelList dataKey="margemLucroReal" position="center" formatter={(value: number) => formatPercent(value)} style={{ fill: "#EAE6DF", fontSize: 11, fontFamily: "Inter, sans-serif" }} />
+                  </Bar>
+                  <Bar dataKey="ganhoMargem" stackId="a" fill={CHART_COLORS.accent} name="Ganho de Margem" barSize={22} radius={[8, 8, 8, 8]}>
+                    <LabelList
+                      dataKey="ganhoMargem"
+                      position="center"
+                      formatter={(value: number) => (value > 0 ? `+${Number(value).toFixed(1)}%` : "")}
+                      style={{ fill: "#010326", fontSize: 11, fontWeight: "bold", fontFamily: "Inter, sans-serif" }}
+                    />
+                  </Bar>
+                </>
+              )}
             </BarChart>
           </ChartContainer>
         </section>
