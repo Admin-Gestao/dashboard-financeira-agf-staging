@@ -678,7 +678,7 @@ export default function DashboardPage() {
       const aluguelValor = Number(despesasDetalhadas.aluguel || 0);
       const extrasValor = Number(despesasDetalhadas.extras || 0);
       const parcelasValor = Number(despesasDetalhadas.parcela_debitos || 0);
-      const despesasDetalhadasComOutras = {
+      const despesasDetalhadasComOutras: Record<string, number> = {
         ...despesasDetalhadas,
         outras_despesas: outrasDespesas,
       };
