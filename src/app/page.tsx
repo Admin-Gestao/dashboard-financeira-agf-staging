@@ -2024,21 +2024,19 @@ export default function DashboardPage() {
               <Legend wrapperStyle={{ fontFamily: "Inter, sans-serif", fontSize: "11px", color: "#8B9ABF" }} />
               {simulationView === "resultado" ? (
                 <>
-                  <Bar dataKey="resultado" fill={CHART_COLORS.receita} name="Resultado Real" barSize={18} radius={[7, 7, 7, 7]} activeBar={{ fill: "#7390d5" }}>
+                  <Bar dataKey="resultado" stackId="resultado" fill={CHART_COLORS.receita} name="Resultado Real" barSize={22} radius={[8, 8, 8, 8]}>
                     <LabelList
                       dataKey="resultado"
-                      position="right"
-                      offset={8}
+                      position="center"
                       formatter={(value: number) => formatCompact(value)}
                       style={{ fill: "#EAE6DF", fontSize: 10, fontFamily: "Inter, sans-serif" }}
                     />
                   </Bar>
-                  <Bar dataKey="resultadoSimulado" fill={CHART_COLORS.resultado} name="Resultado Simulado" barSize={18} radius={[7, 7, 7, 7]} activeBar={{ fill: "#3bc59d" }}>
+                  <Bar dataKey="impactoFinanceiroSimulado" stackId="resultado" fill={CHART_COLORS.resultado} name="Ganho no Resultado" barSize={22} radius={[8, 8, 8, 8]}>
                     <LabelList
-                      dataKey="resultadoSimulado"
-                      position="right"
-                      offset={8}
-                      formatter={(value: number) => formatCompact(value)}
+                      dataKey="impactoFinanceiroSimulado"
+                      position="center"
+                      formatter={(value: number) => (Number(value ?? 0) > 0 ? `+${formatCompact(Number(value ?? 0))}` : "")}
                       style={{ fill: "#9BE5CF", fontSize: 10, fontFamily: "Inter, sans-serif" }}
                     />
                   </Bar>
